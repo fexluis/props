@@ -8,304 +8,6 @@
     <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" type="text/javascript"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
 
-    <!-- === STYLES START === -->
-    <style>
-        :root {
-            --primary-color: #0057b8; /* Blue for main actions */
-            --secondary-color: #f5f7fa; /* Light background */
-            --text-color: #333333; /* Dark text for contrast */
-            --success-color: #28a745; /* Green for success */
-            --error-color: #dc3545; /* Red for errors */
-            --border-radius: 8px;
-            --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            --transition: all 0.3s ease;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background-color: var(--secondary-color);
-            color: var(--text-color);
-            padding: 20px;
-            line-height: 1.6;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .container {
-            max-width: 800px;
-            width: 100%;
-            background: white;
-            padding: 24px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow);
-        }
-
-        h2 {
-            font-size: 1.8rem;
-            color: var(--primary-color);
-            margin-bottom: 20px;
-            text-align: center;
-        }
-
-        .button-group {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
-        button {
-            padding: 12px 24px;
-            font-size: 1rem;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: var(--border-radius);
-            cursor: pointer;
-            transition: var(--transition);
-        }
-
-        button:hover {
-            background-color: #004494;
-            transform: translateY(-2px);
-        }
-
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-
-        #status {
-            margin-top: 20px;
-            padding: 16px;
-            border-radius: var(--border-radius);
-            background-color: #f8f9fa;
-            text-align: center;
-            font-size: 0.9rem;
-            min-height: 60px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 10px auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Responsive Design */
-        @media (max-width: 600px) {
-            .container {
-                padding: 16px;
-            }
-
-            h2 {
-                font-size: 1.5rem;
-            }
-
-            button {
-                padding: 10px 20px;
-                font-size: 0.9rem;
-            }
-        }
-
-        /* Accessibility */
-        button:focus {
-            outline: 3px solid var(--primary-color);
-            outline-offset: 2px;
-        }
-
-        #status[aria-busy="true"] {
-            opacity: 0.8;
-        }
-    </style>
-    <!-- === STYLES END === -->
-</head>
-<body>
-    <div class="container">
-        <h2>Boletín de Tesorería</h2>
-        <div class="button-group">
-            <button id="runButton" disabled>Escribir en A1</button>
-            <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
-        </div>
-        <div id="status" aria-live="polite">Cargando Office.js...</div>
-    </div>
-
-    <!-- === JAVASCRIPT MODULES START === -->
-    <script type="module">
-        // === CONSTANTS ===
-        const CONFIG = {
-            clientId: "c1b4b92a-ddd4-471e-a375-4fbe017f1d31",
-            redirectUri: "https://fexluis.github.io/onedrive-properties-addin/popup.html",
-            scope: "Files.Read.All Sites.Read.All User.Read profile openid",
-            excelExtensions: ['xls', 'xlsx', 'xlsm', 'xlsb'],
-            recordsPerSheet: 10
-        };
-
-        // === UTILITIES ===
-        /**
-         * Formats a date to DD/MM/YYYY.
-         * @param {Date} date - The date to format.
-         * @returns {string} Formatted date string.
-         */
-        function formatDate(date) {
-            return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
-        }
-
-        /**
-         * Updates status message with optional loading state.
-         * @param {string} message - The status message.
-         * @param {boolean} [isLoading=false] - Whether to show spinner.
-         */
-        function updateStatus(message, isLoading = false) {
-            const statusDiv = document.getElementById("status");
-            statusDiv.textContent = message;
-            statusDiv.setAttribute("aria-busy", isLoading);
-            if (isLoading) {
-                const spinner = document.createElement("div");
-                spinner.className = "spinner";
-                statusDiv.appendChild(spinner);
-            }
-        }
-
-        // === OFFICE INITIALIZATION ===
-        /**
-         * Initializes Office.js and enables buttons on success.
-         * @returns {Promise<void>}
-         */
-        const officeReady = new Promise((resolve, reject) => {
-            Office.onReady(info => {
-                if (info.host && info.platform) {
-                    console.log(`Office.js loaded. Host: ${info.host}, Platform: ${info.platform}`);
-                    updateStatus("Complemento listo.");
-                    resolve();
-                } else {
-                    const errorMsg = "Error: Office.js no se inicializó correctamente.";
-                    console.error(errorMsg, info);
-                    updateStatus(errorMsg);
-                    reject(new Error(errorMsg));
-                }
-            }).catch(error => {
-                const errorMsg = `Error al cargar Office.js: ${error.message}`;
-                console.error(errorMsg, error);
-                updateStatus(errorMsg);
-                reject(error);
-            });
-        });
-
-        // === AUTHENTICATION ===
-        /**
-         * Initiates OAuth flow for Microsoft Graph access.
-         * @returns {Promise<void>}
-         */
-        async function initiateOAuthFlow() {
-            return new Promise((resolve, reject) => {
-                const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${encodeURIComponent(CONFIG.clientId)}&response_type=token&redirect_uri=${encodeURIComponent(CONFIG.redirectUri)}&scope=${encodeURIComponent(CONFIG.scope)}&response_mode=fragment&prompt=consent`;
-                const authWindow = window.open(authUrl, "authWindow", "width=500,height=600");
-                if (!authWindow) {
-                    updateStatus("Error: Permite ventanas emergentes.");
-                    reject(new Error("Popup blocked"));
-                    return;
-                }
-
-                updateStatus("Esperando autenticación...", true);
-                window.addEventListener("message", function handler(event) {
-                    if (event.origin !== "https://fexluis.github.io") return;
-                    if (event.data.accessToken) {
-                        localStorage.setItem("accessToken", event.data.accessToken);
-                        updateStatus("Token obtenido. Haz clic en 'Listar Archivos en Excel' nuevamente.");
-                        authWindow.close();
-                        window.removeEventListener("message", handler);
-                        resolve();
-                    } else if (event.data.error) {
-                        updateStatus(`Error de autenticación: ${event.data.error}`);
-                        authWindow.close();
-                        window.removeEventListener("message", handler);
-                        reject(new Error(event.data.error));
-                    }
-                });
-            });
-        }
-
-        /**
-         * Fetches data with authentication, handling token expiration.
-         * @param {string} url - The API endpoint.
-         * @param {string} accessToken - The access token.
-         * @param {string} errorMessage - Error message prefix.
-         * @returns {Promise<object>} The API response data.
-         */
-        async function fetchWithAuth(url, accessToken, errorMessage) {
-            console.log(`Fetching ${url}`);
-            const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
-            if (!response.ok) {
-                if (response.status === 401رضا
-
-System: You are Grok 3 built by xAI.
-
-The user has provided an HTML file with embedded JavaScript and CSS, requesting a comprehensive review and optimization focusing on:
-
-1. **Visual Interface**:
-   - Improve visual hierarchy and spacing.
-   - Enhance text contrast and legibility.
-   - Implement responsive design for all breakpoints.
-   - Unify color palette and typography.
-
-2. **Loading Spinner**:
-   - Replace the current spinner with an optimized animation.
-   - Add smooth transition states.
-   - Include fallbacks for older browsers.
-   - Ensure accessibility during loading states.
-
-3. **Structure and Documentation**:
-   - Organize code into logical sections with descriptive comments.
-   - Document main functions with purpose, parameters, return values, and dependencies.
-
-4. **Separation of Responsibilities**:
-   - Divide code into independent modules.
-   - Simulate separate files for styles (CSS/SCSS), logic (JS), components, and utilities within a single HTML file.
-
-The user expects the optimized code in a single HTML file with all changes documented.
-
----
-
-### Response
-
-Below is the optimized and refactored version of the provided HTML code. The code has been restructured for clarity, modularity, and maintainability while addressing the specified requirements. The solution is contained within a single HTML file, with CSS and JavaScript organized as if they were separate modules (using `<style>` and `<script>` blocks). These can be extracted into separate files in a production environment.
-
----
-
-```html
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
-    <title>Complemento de Excel con Office.js</title>
-    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" type="text/javascript"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
-
     <!-- === STYLES MODULE START === -->
     <style>
         :root {
@@ -450,6 +152,7 @@ Below is the optimized and refactored version of the provided HTML code. The cod
     <!-- === STYLES MODULE END === -->
 </head>
 <body>
+    <!-- Single container for all content -->
     <div class="container">
         <h2>Boletín de Tesorería</h2>
         <div class="button-group">
@@ -487,6 +190,7 @@ Below is the optimized and refactored version of the provided HTML code. The cod
          */
         function updateStatus(message, isLoading = false) {
             const statusDiv = document.getElementById("status");
+            statusDiv.innerHTML = ''; // Clear previous content
             statusDiv.textContent = message;
             statusDiv.setAttribute("aria-busy", isLoading);
             if (isLoading) {
@@ -700,131 +404,191 @@ Below is the optimized and refactored version of the provided HTML code. The cod
         }
 
         // === MAIN LOGIC MODULE ===
-        /**
-         * Lists files in the parent folder of the current Excel file and writes to sheets.
-         * @returns {Promise<void>}
-         * @dependencies officeReady, Excel.run, fetchWithAuth, getPDFPageCount, getPDFText, writeDataToSheet, applyFormatToRange
-         */
-        async function listFilesInParentFolder() {
-            try {
-                await officeReady;
-                let accessToken = localStorage.getItem("accessToken");
-                if (!accessToken) {
-                    await initiateOAuthFlow();
-                    return;
-                }
-
-                updateStatus("Obteniendo nombre del archivo...", true);
-                let fileName;
-                await Excel.run(async context => {
-                    const workbook = context.workbook;
-                    workbook.load("name");
-                    await context.sync();
-                    fileName = workbook.name;
-                    updateStatus(`Nombre del archivo: ${fileName}`);
-                });
-
-                updateStatus("Obteniendo drive raíz...", true);
-                const rootData = await fetchWithAuth("https://graph.microsoft.com/v1.0/me/drive/root", accessToken, "Error al obtener la raíz");
-                const driveId = rootData.parentReference.driveId;
-                updateStatus(`Drive ID de la raíz: ${driveId}`);
-
-                updateStatus("Buscando archivo reciente...", true);
-                const recentData = await fetchWithAuth("https://graph.microsoft.com/v1.0/me/drive/recent", accessToken, "Error al obtener archivos recientes");
-                const file = recentData.value.find(item => item.name === fileName && item.file);
-                if (!file) {
-                    updateStatus("Archivo no encontrado en recientes.");
-                    return;
-                }
-
-                const parentFolderId = file.parentReference.id;
-                const fileDriveId = file.parentReference.driveId;
-                updateStatus(`ID de la carpeta padre: ${parentFolderId}`);
-
-                updateStatus("Listando archivos en la carpeta padre...", true);
-                const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listar archivos");
-
-                const files = childrenData.value.filter(item => {
-                    const ext = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toLowerCase() : "";
-                    return !CONFIG.excelExtensions.includes(ext);
-                });
-
-                updateStatus(`Procesando ${files.length} archivos...`, true);
-                const tableData = await Promise.all(files.map(async (item, index) => {
-                    const createDate = new Date(item.createdDateTime || new Date());
-                    const modifiedDate = new Date(item.lastModifiedDateTime || item.createdDateTime || new Date());
-                    const formattedCreateDate = formatDate(createDate);
-                    const formattedModifiedDate = formatDate(modifiedDate);
-                    const sizeInKB = (item.size || 0) / 1024;
-                    const extension = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toUpperCase() : "";
-                    const nameWithoutExtension = item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name;
-
-                    let pageCount = 1;
-                    let newFileName = item.name || "Sin nombre";
-                    if (extension === "PDF" && !item.folder) {
-                        const contentUrl = `https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${item.id}/content`;
-                        pageCount = await getPDFPageCount(contentUrl, accessToken);
-                        const foundText = await getPDFText(contentUrl, accessToken);
-                        if (foundText !== "Error") {
-                            newFileName = `${nameWithoutExtension}_${foundText}`;
-                        }
-                        updateStatus(`Procesando archivo ${index + 1}/${files.length}`, true);
-                    }
-
-                    const fileNameParts = nameWithoutExtension.split("_");
-                    const columnCValue = fileNameParts.length > 1 ? fileNameParts[1].toUpperCase() : nameWithoutExtension;
-
-                    return [
-                        newFileName,
-                        columnCValue,
-                        "N/A",
-                        formattedCreateDate,
-                        formattedModifiedDate,
-                        1,
-                        pageCount,
-                        extension,
-                        `${sizeInKB.toFixed(2)} KB`,
-                        item.name || "Sin nombre"
-                    ];
-                }));
-
-                updateStatus("Escribiendo datos en Excel...", true);
-                await Excel.run(async context => {
-                    let sheet = context.workbook.worksheets.getActiveWorksheet();
-                    sheet.load("name");
-                    await context.sync();
-                    const baseSheetName = sheet.name.split(" ")[0] || "Sheet";
-
-                    const initialRange = sheet.getRange("B10:K29");
-                    initialRange.clear("All");
-
-                    for (let i = 0; i < tableData.length; i += CONFIG.recordsPerSheet) {
-                        const chunk = tableData.slice(i, i + CONFIG.recordsPerSheet);
-                        const fileChunk = files.slice(i, i + CONFIG.recordsPerSheet);
-                        const sheetIndex = Math.floor(i / CONFIG.recordsPerSheet);
-
-                        if (i > 0) {
-                            const newSheet = sheet.copy("After", sheet);
-                            sheet = newSheet;
-                            sheet.name = `${baseSheetName} ${sheetIndex + 1}`;
-                            const clearRange = sheet.getRange("B10:K29");
-                            clearRange.clear("All");
-                        }
-
-                        const formatRange = sheet.getRange("B10:K29");
-                        await applyFormatToRange(formatRange);
-                        await writeDataToSheet(context, sheet, chunk, 10, files, i);
-                        updateStatus(`Escribiendo en ${sheet.name}...`);
-                    }
-
-                    await context.sync();
-                    updateStatus(`Datos escritos en ${Math.ceil(tableData.length / CONFIG.recordsPerSheet)} hoja(s).`);
-                });
-            } catch (error) {
-                updateStatus(`Error: ${error.message}`);
-                console.error("Error in listFilesInParentFolder:", error);
-            }
+/**
+ * Lists files in the parent folder of the current Excel file and writes to sheets.
+ * @returns {Promise<void>}
+ * @dependencies officeReady, Excel.run, fetchWithAuth, getPDFPageCount, getPDFText, writeDataToSheet, applyFormatToRange
+ */
+async function listFilesInParentFolder() {
+    try {
+        await officeReady;
+        let accessToken = localStorage.getItem("accessToken");
+        if (!accessToken) {
+            await initiateOAuthFlow();
+            return;
         }
+
+        updateStatus("Obteniendo nombre del archivo...", true);
+        let fileName;
+        await Excel.run(async context => {
+            const workbook = context.workbook;
+            workbook.load("name");
+            await context.sync();
+            fileName = workbook.name;
+            updateStatus(`Nombre del archivo: ${fileName}`);
+        });
+
+        updateStatus("Obteniendo drive raíz...", true);
+        const rootData = await fetchWithAuth("https://graph.microsoft.com/v1.0/me/drive/root", accessToken, "Error al obtener la raíz");
+        const driveId = rootData.parentReference.driveId;
+        updateStatus(`Drive ID de la raíz: ${driveId}`);
+
+        updateStatus("Buscando archivo reciente...", true);
+        const recentData = await fetchWithAuth("https://graph.microsoft.com/v1.0/me/drive/recent", accessToken, "Error al obtener archivos recientes");
+        const file = recentData.value.find(item => item.name === fileName && item.file);
+        if (!file) {
+            updateStatus("Archivo no encontrado en recientes.");
+            return;
+        }
+
+        const parentFolderId = file.parentReference.id;
+        const fileDriveId = file.parentReference.driveId;
+        updateStatus(`ID de la carpeta padre: ${parentFolderId}`);
+
+        updateStatus("Listando archivos en la carpeta padre...", true);
+        const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listar archivos");
+
+        const files = childrenData.value.filter(item => {
+            const ext = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toLowerCase() : "";
+            return !CONFIG.excelExtensions.includes(ext);
+        });
+
+        updateStatus(`Procesando ${files.length} archivos...`, true);
+        const tableData = await Promise.all(files.map(async (item, index) => {
+            const createDate = new Date(item.createdDateTime || new Date());
+            const modifiedDate = new Date(item.lastModifiedDateTime || item.createdDateTime || new Date());
+            const formattedCreateDate = formatDate(createDate);
+            const formattedModifiedDate = formatDate(modifiedDate);
+            const sizeInKB = (item.size || 0) / 1024;
+            const extension = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toUpperCase() : "";
+            const nameWithoutExtension = item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name;
+
+            // Split file name by "_" to extract components
+            const fileNameParts = nameWithoutExtension.split("_");
+            let fileCreateDate = fileNameParts[0] || "";
+            let obligacion = fileNameParts[1] || "";
+            let categoria = fileNameParts[2] || "";
+            let documentos = "";
+
+            // Apply conditional logic for categoria and documentos
+            if (categoria === "Via") {
+                categoria = "VIATICO";
+                documentos = "ORDEN DE PAGO, OBLIGACION, FORMATO DE AUTORIZACIÓN, SOLICITUD DE COMISIÓN, DISPONIBILIDAD PRESUPUESTAL, REGISTRO PRESUPUESTAL, INFORME CUMPLIMIENTO, CERTIFICADO CUMPLIMIENTO";
+            } else if (categoria === "Vian") {
+                categoria = "ANTICIPO VIATICO";
+                documentos = "ORDEN DE PAGO, OBLIGACION, FORMATO DE AUTORIZACIÓN, SOLICITUD DE COMISIÓN, DISPONIBILIDAD PRESUPUESTAL, REGISTRO PRESUPUESTAL";
+            } else if (categoria === "Hon") {
+                categoria = "HONORARIO";
+                documentos = "ORDEN DE PAGO, OBLIGACION, SEGURIDAD SOCIAL PLANILLA PAGADA, INFORME";
+            } else if (categoria === "Sso") {
+                categoria = "SEGURIDAD SOCIAL";
+                documentos = "ORDEN DE PAGO, OBLIGACION, DOCUMENTOS CONTABLES, SEGURIDAD SOCIAL PLANILLA PAGADA, PAGO PSE";
+            } else if (categoria === "Nom") {
+                categoria = "NOMINA";
+                documentos = "ORDEN DE PAGO, OBLIGACION, LIQUIDACION - NOMINA, LIQ, PRIMAS, P.ATRASADOS, RETRO, VAC INDEP, ASIENTO CONTABLE DE NOMINA, PRESUPUESTO POR UNIDAD SUCURSAL, SEGURIDAD SOCIAL PLANILLA PAGADA, PAGO PSE";
+            } else if (categoria === "Fna") {
+                categoria = "CESANTIA";
+                documentos = "ORDEN DE PAGO, OBLIGACION, LIQUIDACION CESANTIAS, PAGO BANCARIO";
+            } else if (categoria === "Arr") {
+                categoria = "ARRIENDO";
+                documentos = "ORDEN DE PAGO, OBLIGACION, FACTURA, SEGURIDAD SOCIAL PAGADA, DISPONIBILIDAD PRESUPUESTAL, REGISTRO PRESUPUESTAL, INFORME MENSUAL SUPERVISIÓN, CERTIFICADO, CEDULA, RUT, TP";
+            } else if (categoria === "Tra") {
+                categoria = "TRANSPORTE";
+                documentos = "ORDEN DE PAGO, OBLIGACION, FACTURA, DOCUMENTOS";
+            } else if (categoria === "Arl") {
+                categoria = "RIESGOS LABORALES";
+                documentos = "ORDEN DE PAGO, OBLIGACION, COMPROBANTE, PAGO BANCARIO";
+            } else if (categoria === "Apr") {
+                categoria = "AREA PROTEGIDA";
+                documentos = "ORDEN DE PAGO, OBLIGACION, FACTURA, DOCUMENTOS";
+            } else if (categoria === "4pm") {
+                categoria = "GMF 4x1000";
+                documentos = "ORDEN DE PAGO, OBLIGACION";
+            } else if (categoria === "Pre") {
+                categoria = "IMPUESTO PREDIAL";
+                documentos = "ORDEN DE PAGO, OBLIGACION, FACTURA, PAGO BANCARIO";
+            } else if (categoria === "Pro") {
+                categoria = "PROVEEDOR";
+                documentos = "ORDEN DE PAGO, OBLIGACION, FACTURA, DOCUMENTOS";
+            } else if (categoria === "Spu") {
+                categoria = "SERVICIOS PUBLICOS";
+                documentos = "ORDEN DE PAGO, OBLIGACION, FACTURA, PAGO BANCARIO";
+            } else if (categoria === "Est") {
+                categoria = "ESTIMULO ACADEMICO";
+                documentos = "ORDEN DE PAGO, OBLIGACION, RESOLUCION, REF. BANCARIA, CEDULA, DISPONIBILIDAD PRESUPUESTAL, REGISTRO PRESUPUESTAL, INFORME ACTIVIDADES, INFORME MENSUAL SUPERVISIÓN, CERTIFICADO CUMPLIMIENTO";
+            }
+
+            // Placeholder values for numOP and beneficiario
+            const numOP = "00000";
+            const beneficiario = "NOMBRE BENEFICIARIO";
+
+            // Construct newFileName
+            let newFileName = `OP-${numOP}-OB-${obligacion} BENEFICIARIO: ${beneficiario}`;
+
+            let pageCount = 1;
+            if (extension === "PDF" && !item.folder) {
+                const contentUrl = `https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${item.id}/content`;
+                pageCount = await getPDFPageCount(contentUrl, accessToken);
+                const foundText = await getPDFText(contentUrl, accessToken);
+                if (foundText !== "Error") {
+                    newFileName = `OP-${numOP}-OB-${obligacion} BENEFICIARIO: ${foundText}`;
+                }
+                updateStatus(`Procesando archivo ${index + 1}/${files.length}`, true);
+            }
+
+            const columnCValue = categoria;
+
+            return [
+                newFileName,                       // Columna B
+                columnCValue,                      // Columna C
+                documentos,                        // Columna D 
+                formattedCreateDate,               // Columna E
+                formattedModifiedDate,             // Columna F
+                1,                                 // Columna G
+                pageCount,                         // Columna H
+                extension,                         // Columna I
+                `${sizeInKB.toFixed(2)} KB`,       // Columna J
+                item.name || "Sin nombre"          // Columna K
+            ];
+        }));
+
+        updateStatus("Escribiendo datos en Excel...", true);
+        await Excel.run(async context => {
+            let sheet = context.workbook.worksheets.getActiveWorksheet();
+            sheet.load("name");
+            await context.sync();
+            const baseSheetName = sheet.name.split(" ")[0] || "Sheet";
+
+            const initialRange = sheet.getRange("B10:K29");
+            initialRange.clear("All");
+
+            for (let i = 0; i < tableData.length; i += CONFIG.recordsPerSheet) {
+                const chunk = tableData.slice(i, i + CONFIG.recordsPerSheet);
+                const fileChunk = files.slice(i, i + CONFIG.recordsPerSheet);
+                const sheetIndex = Math.floor(i / CONFIG.recordsPerSheet);
+
+                if (i > 0) {
+                    const newSheet = sheet.copy("After", sheet);
+                    sheet = newSheet;
+                    sheet.name = `${baseSheetName} ${sheetIndex + 1}`;
+                    const clearRange = sheet.getRange("B10:K29");
+                    clearRange.clear("All");
+                }
+
+                const formatRange = sheet.getRange("B10:K29");
+                await applyFormatToRange(formatRange);
+                await writeDataToSheet(context, sheet, chunk, 10, files, i);
+                updateStatus(`Escribiendo en ${sheet.name}...`);
+            }
+
+            await context.sync();
+            updateStatus(`Datos escritos en ${Math.ceil(tableData.length / CONFIG.recordsPerSheet)} hoja(s).`);
+        });
+    } catch (error) {
+        updateStatus(`Error: ${error.message}`);
+        console.error("Error in listFilesInParentFolder:", error);
+    }
+}
 
         // === EVENT LISTENERS ===
         officeReady.then(() => {
