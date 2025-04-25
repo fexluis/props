@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_NAME = 'treasury-bulletin-v1';
+const CACHE_NAME = 'treasury-bulletin-v2';
 const urlsToCache = [
   '/',
   '/index.html',
