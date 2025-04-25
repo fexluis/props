@@ -154,7 +154,7 @@
 <body>
     <!-- Single container for all content -->
     <div class="container">
-        <h2>Boletín de Tesorería v5</h2>
+        <h2>Boletín de Tesorería v10</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -199,6 +199,24 @@
             const month = (date.getMonth() + 1).toString().padStart(2, '0');
             const day = date.getDate().toString().padStart(2, '0');
             return `${year}${month}${day}`;
+        }
+
+        /**
+         * Converts a date string (YYYY-MM-DD) to YYYYMMDD format.
+         * @param {string} dateStr - The date string to convert.
+         * @returns {string} Formatted date string in YYYYMMDD format or "Error" if invalid.
+         */
+        function formatDateString(dateStr) {
+            try {
+                const [year, month, day] = dateStr.split('-').map(Number);
+                if (!year || !month || !day) throw new Error('Invalid date components');
+                const date = new Date(year, month - 1, day);
+                if (isNaN(date.getTime())) throw new Error('Invalid date');
+                return formatDate(date);
+            } catch (error) {
+                console.error(`Error formatting date string "${dateStr}":`, error.message);
+                return "Error";
+            }
         }
 
         /**
@@ -339,7 +357,7 @@
         }
 
         /**
-         * Extracts text following "Número:", "Fecha Registro:", and "Razón Social:" from page 1 of a PDF.
+         * Extracts text following "ORDEN DE PAGO PRESUPUESTAL", "Fecha Registro:", and "Razón Social:" from page 1 of a PDF.
          * @param {string} url - The PDF content URL.
          * @param {string} accessToken - The access token.
          * @returns {Promise<object>} Object with numero, fechaRegistro, razonSocial, or "Error" if not found.
@@ -366,28 +384,25 @@
 
                 console.log(`Extracted text from page 1 of ${url}:`, textItems);
 
-                // Join text items to handle cases where text is split across items
-                const fullText = textItems.join(" ");
-                const regexNumero = /Número:\s*([\S]+)\s*/i;
-                const regexFecha = /Fecha Registro:\s*([\d\/]+)\s*/i;
-                const regexRazon = /Razón Social:\s*([^\n]+)\s*/i;
-
-                const matchNumero = fullText.match(regexNumero);
-                const matchFecha = fullText.match(regexFecha);
-                const matchRazon = fullText.match(regexRazon);
-
-                if (matchNumero && matchNumero[1]) {
-                    result.numero = matchNumero[1].toUpperCase();
-                }
-                if (matchFecha && matchFecha[1]) {
-                    result.fechaRegistro = matchFecha[1];
-                }
-                if (matchRazon && matchRazon[1]) {
-                    result.razonSocial = matchRazon[1].toUpperCase();
+                // Iterate through text items to find labels and their values
+                for (let i = 0; i < textItems.length - 2; i++) {
+                    const currentItem = textItems[i].trim();
+                    if (currentItem === "ORDEN DE PAGO PRESUPUESTAL" && i + 2 < textItems.length) {
+                        const value = textItems[i + 2].trim();
+                        if (value) result.numero = value.toUpperCase();
+                    }
+                    if (currentItem === "Fecha Registro:" && i + 2 < textItems.length) {
+                        const value = textItems[i + 2].trim();
+                        if (value) result.fechaRegistro = value;
+                    }
+                    if (currentItem === "Razón Social:" && i + 2 < textItems.length) {
+                        const value = textItems[i + 2].trim();
+                        if (value) result.razonSocial = value.toUpperCase();
+                    }
                 }
 
                 console.log(`Extracted values from page 1 of ${url}:`, {
-                    "Número:": result.numero,
+                    "ORDEN DE PAGO PRESUPUESTAL": result.numero,
                     "Fecha Registro:": result.fechaRegistro,
                     "Razón Social:": result.razonSocial
                 });
@@ -510,7 +525,7 @@
                 const tableData = await Promise.all(files.map(async (item, index) => {
                     const createDate = new Date(item.createdDateTime || new Date());
                     const modifiedDate = new Date(item.lastModifiedDateTime || item.createdDateTime || new Date());
-                    const formattedCreateDate = formatDate(createDate);
+                    let formattedCreateDate = formatDate(createDate);
                     const formattedModifiedDate = formatDate(modifiedDate);
                     const sizeInKB = (item.size || 0) / 1024;
                     const extension = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toUpperCase() : "";
@@ -588,6 +603,12 @@
                         }
                         if (pdfText.razonSocial !== "Error") {
                             beneficiario = pdfText.razonSocial;
+                        }
+                        if (pdfText.fechaRegistro !== "Error") {
+                            const formattedDate = formatDateString(pdfText.fechaRegistro);
+                            if (formattedDate !== "Error") {
+                                formattedCreateDate = formattedDate;
+                            }
                         }
                         newFileName = `OP-${numOP}-OB-${obligacion} BENEFICIARIO: ${beneficiario}`;
                         updateStatus(`Procesando archivo ${index + 1}/${files.length}`, true);
