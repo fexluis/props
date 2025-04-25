@@ -154,7 +154,7 @@
 <body>
     <!-- Single container for all content -->
     <div class="container">
-        <h2>Boletín de Tesorería v2</h2>
+        <h2>Boletín de Tesorería v3</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -317,35 +317,63 @@
         }
 
         /**
-         * Extracts text following "asignatura" or "materia" in a PDF.
+         * Extracts text following "Número:", "Fecha Registro:", and "Razón Social:" from page 1 of a PDF.
          * @param {string} url - The PDF content URL.
          * @param {string} accessToken - The access token.
-         * @returns {Promise<string>} Extracted text or "Error".
+         * @returns {Promise<object>} Object with numero, fechaRegistro, razonSocial, or "Error" if not found.
          * @dependencies pdf.js
          */
         async function getPDFText(url, accessToken) {
-            console.log(`Searching text in ${url}`);
+            console.log(`Searching text in ${url} (page 1 only)`);
             try {
                 const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
                 if (!response.ok) throw new Error(`Error downloading PDF: ${response.statusText}`);
                 const arrayBuffer = await response.arrayBuffer();
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                const regex = /(asignatura|materia)\s*:?\s*(?:[A-Z0-9-]+\s+)?(.+)/i;
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    for (const item of textContent.items) {
-                        const text = item.str;
-                        if (text.toLowerCase().includes("asignatura") || text.toLowerCase().includes("materia")) {
-                            const match = text.match(regex);
-                            if (match && match[2]) return match[2].toUpperCase();
-                        }
-                    }
+
+                const result = {
+                    numero: "Error",
+                    fechaRegistro: "Error",
+                    razonSocial: "Error"
+                };
+
+                // Process only page 1
+                const page = await pdf.getPage(1);
+                const textContent = await page.getTextContent();
+                const textItems = textContent.items.map(item => item.str);
+
+                console.log(`Extracted text from page 1 of ${url}:`, textItems);
+
+                // Join text items to handle cases where text is split across items
+                const fullText = textItems.join(" ");
+                const regexNumero = /Número:\s*([\S]+)\s*/i;
+                const regexFecha = /Fecha Registro:\s*([\d\/]+)\s*/i;
+                const regexRazon = /Razón Social:\s*([^\n]+)\s*/i;
+
+                const matchNumero = fullText.match(regexNumero);
+                const matchFecha = fullText.match(regexFecha);
+                const matchRazon = fullText.match(regexRazon);
+
+                if (matchNumero && matchNumero[1]) {
+                    result.numero = matchNumero[1].toUpperCase();
                 }
-                return "Error";
+                if (matchFecha && matchFecha[1]) {
+                    result.fechaRegistro = matchFecha[1];
+                }
+                if (matchRazon && matchRazon[1]) {
+                    result.razonSocial = matchRazon[1].toUpperCase();
+                }
+
+                console.log(`Extracted values from page 1 of ${url}:`, {
+                    "Número:": result.numero,
+                    "Fecha Registro:": result.fechaRegistro,
+                    "Razón Social:": result.razonSocial
+                });
+
+                return result;
             } catch (error) {
-                console.error("Error processing PDF:", error);
-                return "Error";
+                console.error(`Error processing PDF ${url}:`, error);
+                return { numero: "Error", fechaRegistro: "Error", razonSocial: "Error" };
             }
         }
 
@@ -521,9 +549,9 @@
                         documentos = "ORDEN DE PAGO, OBLIGACION, RESOLUCION, REF. BANCARIA, CEDULA, REGISTRO PRESUPUESTAL, INFORMES, CERTIFICADO CUMPLIMIENTO";
                     }
 
-                    // Placeholder values for numOP and beneficiario
-                    const numOP = "00000";
-                    const beneficiario = "NOMBRE BENEFICIARIO";
+                    // Default values for numOP and beneficiario
+                    let numOP = "00000";
+                    let beneficiario = "NOMBRE BENEFICIARIO";
 
                     // Construct newFileName
                     let newFileName = `OP-${numOP}-OB-${obligacion} BENEFICIARIO: ${beneficiario}`;
@@ -532,10 +560,14 @@
                     if (extension === "PDF" && !item.folder) {
                         const contentUrl = `https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${item.id}/content`;
                         pageCount = await getPDFPageCount(contentUrl, accessToken);
-                        const foundText = await getPDFText(contentUrl, accessToken);
-                        if (foundText !== "Error") {
-                            newFileName = `OP-${numOP}-OB-${obligacion} BENEFICIARIO: ${foundText}`;
+                        const pdfText = await getPDFText(contentUrl, accessToken);
+                        if (pdfText.numero !== "Error") {
+                            numOP = pdfText.numero;
                         }
+                        if (pdfText.razonSocial !== "Error") {
+                            beneficiario = pdfText.razonSocial;
+                        }
+                        newFileName = `OP-${numOP}-OB-${obligacion} BENEFICIARIO: ${beneficiario}`;
                         updateStatus(`Procesando archivo ${index + 1}/${files.length}`, true);
                     }
 
