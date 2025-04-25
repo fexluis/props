@@ -154,7 +154,7 @@
 <body>
     <!-- Single container for all content -->
     <div class="container">
-        <h2>Boletín de Tesorería v10</h2>
+        <h2>Boletín de Tesorería</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -588,10 +588,10 @@
 
                     // Default values for numOP and beneficiario
                     let numOP = "00000";
-                    let beneficiario = "NOMBRE BENEFICIARIO";
+                    let beneficiario = "BENEFICIARIO";
 
                     // Construct newFileName
-                    let newFileName = `OP-${numOP}-OB-${obligacion} BENEFICIARIO: ${beneficiario}`;
+                    let newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
 
                     let pageCount = 1;
                     if (extension === "PDF" && !item.folder) {
@@ -610,7 +610,7 @@
                                 formattedCreateDate = formattedDate;
                             }
                         }
-                        newFileName = `OP-${numOP}-OB-${obligacion} BENEFICIARIO: ${beneficiario}`;
+                        newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
                         updateStatus(`Procesando archivo ${index + 1}/${files.length}`, true);
                     }
 
