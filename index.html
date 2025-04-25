@@ -17,12 +17,11 @@
     <h2>Complemento de Prueba v2</h2>
     <button id="runButton">Escribir en A1</button>
     <button id="getFolderIdButton">Listar Archivos en Excel</button>
-    <button id="formatDateButton">Formato Fecha</button>
     <div id="status">Cargando Office.js...</div>
 
     <script type="text/javascript">
         const clientId = "c1b4b92a-ddd4-471e-a375-4fbe017f1d31";
-        const redirectUri = "https://fexluis.github.io/props/popup.html";
+        const redirectUri = "https://fexluis.github.io/onedrive-properties-addin/popup.html";
         const scope = "Files.Read.All Sites.Read.All User.Read profile openid";
         const excelExtensions = ['xls', 'xlsx', 'xlsm', 'xlsb'];
         const waitingGif = 'https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif';
@@ -52,13 +51,10 @@
         officeReady.then(() => {
             const runButton = document.getElementById("runButton");
             const getFolderIdButton = document.getElementById("getFolderIdButton");
-            const formatDateButton = document.getElementById("formatDateButton");
             runButton.disabled = false;
             getFolderIdButton.disabled = false;
-            formatDateButton.disabled = false;
             runButton.onclick = run;
             getFolderIdButton.onclick = listFilesInParentFolder;
-            formatDateButton.onclick = formatDatesInRange;
         });
 
         async function run() {
@@ -113,7 +109,7 @@
                             if (match && match[2]) {
                                 foundText = match[2].toUpperCase();
                                 console.log(`Texto siguiente capturado: "${foundText}"`);
-                                return foundText;
+                                return foundText; // Finaliza la búsqueda en este PDF
                             } else {
                                 console.log("No se pudo capturar texto después del patrón en: ", text);
                             }
@@ -146,15 +142,7 @@
         }
 
         function formatDate(date) {
-            const year = date.getFullYear().toString();
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const day = date.getDate().toString().padStart(2, '0');
-            return `${year}${month}${day}`;
-        }
-
-        function isYYYYMMDD(value) {
-            const regex = /^\d{8}$/;
-            return regex.test(value);
+            return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
         }
 
         function showWaitingGif(message) {
@@ -185,10 +173,6 @@
                     textToDisplay: files[fileStartIndex + i].name || "Sin nombre"
                 };
             }
-        }
-
-        function separateCamelCase(text) {
-            return text.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Z])([A-Z][a-z])/g, '$1 $2');
         }
 
         async function listFilesInParentFolder() {
@@ -234,7 +218,7 @@
                 document.getElementById("status").innerHTML = statusMessage;
 
                 showWaitingGif("Listando archivos en la carpeta padre...");
-                const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listarValue: listar archivos");
+                const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listar archivos");
 
                 const files = childrenData.value.filter(item => {
                     const ext = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toLowerCase() : "";
@@ -265,19 +249,19 @@
                     }
 
                     const fileNameParts = nameWithoutExtension.split("_");
-                    const columnCValue = fileNameParts.length > 1 ? separateCamelCase(fileNameParts[1]) : separateCamelCase(nameWithoutExtension);
+                    const columnCValue = fileNameParts.length > 1 ? fileNameParts[1].toUpperCase() : nameWithoutExtension;
 
                     return [
-                        newFileName,
-                        columnCValue,
-                        "N/A",
-                        formattedCreateDate,
-                        formattedModifiedDate,
-                        1,
-                        pageCount,
-                        extension,
-                        `${sizeInKB.toFixed(2)} KB`,
-                        item.name || "Sin nombre"
+                        newFileName,                       // Columna B
+                        columnCValue,                      // Columna C
+                        "N/A",                             // Columna D
+                        formattedCreateDate,               // Columna E
+                        formattedModifiedDate,             // Columna F
+                        1,                                 // Columna G
+                        pageCount,                         // Columna H
+                        extension,                         // Columna I
+                        `${sizeInKB.toFixed(2)} KB`,       // Columna J
+                        item.name || "Sin nombre"          // Columna K
                     ];
                 });
 
@@ -358,61 +342,6 @@
                     }
                 });
             });
-        }
-
-        async function formatDatesInRange() {
-            try {
-                await officeReady;
-                await Excel.run(async context => {
-                    const sheet = context.workbook.worksheets.getActiveWorksheet();
-                    const range = sheet.getRange("E10:F29");
-                    range.load("values");
-                    await context.sync();
-
-                    const values = range.values;
-                    let alreadyFormatted = 0;
-                    let totalCells = 0;
-
-                    for (let row = 0; row < values.length; row++) {
-                        for (let col = 0; col < values[row].length; col++) {
-                            const cellValue = values[row][col];
-                            if (cellValue) {
-                                totalCells++;
-                                if (isYYYYMMDD(cellValue)) {
-                                    alreadyFormatted++;
-                                } else {
-                                    try {
-                                        const date = new Date(cellValue);
-                                        if (!isNaN(date.getTime())) {
-                                            const formattedDate = formatDate(date);
-                                            values[row][col] = formattedDate;
-                                        } else {
-                                            console.warn(`Valor no es una fecha válida en E${10 + row}:F${10 + row}: "${cellValue}"`);
-                                        }
-                                    } catch (error) {
-                                        console.warn(`Error al convertir fecha en E${10 + row}:F${10 + row}: "${cellValue}"`, error);
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    range.values = values;
-                    await context.sync();
-
-                    if (alreadyFormatted === totalCells && totalCells > 0) {
-                        document.getElementById("status").innerHTML = "Todas las fechas ya estaban en formato YYYYMMDD.";
-                    } else if (totalCells > 0) {
-                        const formattedCount = totalCells - alreadyFormatted;
-                        document.getElementById("status").innerHTML = `Formato de fechas aplicado en E10:F29. ${formattedCount} celdas formateadas, ${alreadyFormatted} ya estaban en formato correcto.`;
-                    } else {
-                        document.getElementById("status").innerHTML = "No se encontraron valores para formatear en E10:F29.";
-                    }
-                });
-            } catch (error) {
-                document.getElementById("status").innerHTML = `Error al formatear fechas: ${error.message}`;
-                console.error("Error en formatDatesInRange:", error);
-            }
         }
     </script>
 </body>
