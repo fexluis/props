@@ -154,7 +154,7 @@
 <body>
     <!-- Single container for all content -->
     <div class="container">
-        <h2>Boletín de Tesorería v3</h2>
+        <h2>Boletín de Tesorería v5</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -164,6 +164,21 @@
 
     <!-- === JAVASCRIPT MODULES START === -->
     <script type="module">
+        // === SERVICE WORKER REGISTRATION ===
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('Service Worker registered with scope:', registration.scope);
+                        // Check for updates
+                        registration.update();
+                    })
+                    .catch(error => {
+                        console.error('Service Worker registration failed:', error);
+                    });
+            });
+        }
+
         // === CONFIG MODULE ===
         const CONFIG = {
             clientId: "c1b4b92a-ddd4-471e-a375-4fbe017f1d31",
@@ -272,7 +287,7 @@
         }
 
         /**
-         * Writes data to a worksheet with hyperlinks.
+         * Writes data to a worksheet with hyperlinks and formats columns B and D for text wrapping.
          * @param {Excel.Context} context - The Excel context.
          * @param {Excel.Worksheet} sheet - The target worksheet.
          * @param {Array<Array<string>>} data - The data to write.
@@ -292,6 +307,13 @@
                     textToDisplay: files[fileStartIndex + i].name || "Sin nombre"
                 };
             }
+            // Format columns B and D for text wrapping
+            const columnB = sheet.getRange(`B${startRow}:B${startRow + data.length - 1}`);
+            const columnD = sheet.getRange(`D${startRow}:D${startRow + data.length - 1}`);
+            columnB.format.wrapText = true;
+            columnD.format.wrapText = true;
+            columnB.format.autofitColumns();
+            columnD.format.autofitColumns();
         }
 
         // === PDF PROCESSING MODULE ===
@@ -576,7 +598,7 @@
                     return [
                         newFileName,                       // Columna B
                         columnCValue,                      // Columna C
-                        documentos,                        // Columna D 
+                        documentos,                        // Columna D
                         formattedCreateDate,               // Columna E
                         formattedModifiedDate,             // Columna F
                         1,                                 // Columna G
