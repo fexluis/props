@@ -545,6 +545,9 @@
                     } else if (categoria === "Vian") {
                         categoria = "ANTICIPO VIATICO";
                         documentos = "ORDEN DE PAGO, OBLIGACION, SOLICITUD, AUTORIZACIÓN, REGISTRO PRESUPUESTAL";
+                    } else if (categoria === "ViaAnt") {
+                        categoria = "ANTICIPO VIATICO";
+                        documentos = "ORDEN DE PAGO, OBLIGACION, SOLICITUD, AUTORIZACIÓN, REGISTRO PRESUPUESTAL";
                     } else if (categoria === "Hon") {
                         categoria = "HONORARIO";
                         documentos = "ORDEN DE PAGO, OBLIGACION, SEGURIDAD SOCIAL PLANILLA PAGADA, INFORME";
@@ -584,6 +587,9 @@
                     } else if (categoria === "Est") {
                         categoria = "ESTIMULO ACADEMICO";
                         documentos = "ORDEN DE PAGO, OBLIGACION, RESOLUCION, REF. BANCARIA, CEDULA, REGISTRO PRESUPUESTAL, INFORMES, CERTIFICADO CUMPLIMIENTO";
+                    } else {
+                        categoria = "PROVEEDOR";
+                        documentos = "ORDEN DE PAGO, OBLIGACION, FACTURA, DOCUMENTOS";
                     }
 
                     // Default values for numOP and beneficiario
