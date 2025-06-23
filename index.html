@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>Boletín de Tesorería v1.17</h2>
+        <h2>Boletín de Tesorería v1.18</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -399,7 +399,7 @@
                 return result;
             } catch (error) {
                 console.error(`Error processing PDF ${url}:`, error);
-                return { numero: "Error", fechaRegistro: "Error", razonSocial: "Error" };
+                return { numero: "Error", numeroRP: "Error", fechaRegistro: "Error", razonSocial: "Error" };
             }
         }
 
@@ -620,16 +620,16 @@
                         if (letras === "CDP") {
                             documentos = "N/A";
                             categoria = "CDP";
-                            newFileName = `CERTIFICADO DE DISPONIBILIDAD PRESUPUESTAL ${consecutivo}`;
+                            newFileName = `CERTIFICADO DE DISPONIBILIDAD PRESUPUESTAL ${numeroRP}`;
                         } else if (letras === "RP") {
                             documentos = "N/A";
                             categoria = "RP";
                             newFileName = `RP ${numeroRP} - ${beneficiario}`;
                         } else {
                             // Fallback if letras not found
-                            categoria = "CDP";
+                            categoria = "RP";
                             documentos = "N/A";
-                            newFileName = `CDP-${consecutivo}`;
+                            newFileName = `RP ${numeroRP} - ${beneficiario}`;
                         }
                     }                      
                      
