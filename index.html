@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>Boletín de Tesorería v1.12</h2>
+        <h2>Boletín de Tesorería v1.13</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -457,7 +457,7 @@
                     await initiateOAuthFlow();
                     return;
                 }
-
+        
                 updateStatus("Obteniendo nombre del archivo...", true);
                 let fileName;
                 await Excel.run(async context => {
@@ -467,12 +467,12 @@
                     fileName = workbook.name;
                     updateStatus(`Nombre del archivo: ${fileName}`);
                 });
-
+        
                 updateStatus("Obteniendo drive raíz...", true);
                 const rootData = await fetchWithAuth("https://graph.microsoft.com/v1.0/me/drive/root", accessToken, "Error al obtener la raíz");
                 const driveId = rootData.parentReference.driveId;
                 updateStatus(`Drive ID de la raíz: ${driveId}`);
-
+        
                 updateStatus("Buscando archivo reciente...", true);
                 const recentData = await fetchWithAuth("https://graph.microsoft.com/v1.0/me/drive/recent", accessToken, "Error al obtener archivos recientes");
                 const file = recentData.value.find(item => item.name === fileName && item.file);
@@ -481,23 +481,23 @@
                     console.error("No file found in recent files matching:", fileName);
                     return;
                 }
-
+        
                 const parentFolderId = file.parentReference.id;
                 const fileDriveId = file.parentReference.driveId;
                 updateStatus(`ID de la carpeta padre: ${parentFolderId}`);
-
+        
                 updateStatus("Listando archivos en la carpeta padre...", true);
                 const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listar archivos");
-
+        
                 console.log("Archivos encontrados en la carpeta padre:", childrenData.value.map(item => item.name));
-
+        
                 const files = childrenData.value.filter(item => {
                     const ext = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toLowerCase() : "";
                     return !CONFIG.excelExtensions.includes(ext);
                 });
-
+        
                 console.log("Archivos filtrados (no carpetas):", files.map(item => item.name));
-
+        
                 updateStatus(`Procesando ${files.length} archivos...`, true);
                 const tableData = await Promise.all(files.map(async (item, index) => {
                     const createDate = new Date(item.createdDateTime || new Date());
@@ -507,18 +507,20 @@
                     const sizeInKB = (item.size || 0) / 1024;
                     const extension = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toUpperCase() : "";
                     const nameWithoutExtension = item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name;
-
+        
                     let fileCreateDate, obligacion, categoria, documentos, newFileName;
                     let numOP = "00000";
                     let beneficiario = "BENEFICIARIO";
-
+                    let letras = ""; // Declare letras at higher scope
+                    let consecutivo = ""; // Declare consecutivo at higher scope
+        
                     if (xDoc === "boletines") {
                         const fileNameParts = nameWithoutExtension.split("_");
                         fileCreateDate = fileNameParts[0] || "";
                         obligacion = fileNameParts[1] || "";
                         categoria = fileNameParts[2] || "";
                         documentos = "";
-
+        
                         if (categoria === "Via") {
                             categoria = "VIATICO";
                             documentos = "ORDEN DE PAGO, OBLIGACION, SOLICITUD, AUTORIZACIÓN, REGISTRO PRESUPUESTAL, INFORME, CERTIFICADO CUMPLIMIENTO";
@@ -568,7 +570,7 @@
                             categoria = "PROVEEDOR";
                             documentos = "ORDEN DE PAGO, OBLIGACION, FACTURA, DOCUMENTOS";
                         }
-
+        
                         newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
                     } else if (xDoc === "CDP") {
                         const fileNameParts = nameWithoutExtension.split("_");
@@ -576,18 +578,16 @@
                         obligacion = fileNameParts[1] || "";
                         categoria = fileNameParts[2] || "";
                         documentos = "";
-
+        
                         // Extract letras and consecutivo from obligacion
                         const pattern = /^(CDP|RP)(\d{3,6})$/i;
                         const match = obligacion.match(pattern);
-                        let letras = "";
-                        let consecutivo = "";
-
+        
                         if (match) {
                             letras = match[1].toUpperCase();
                             consecutivo = match[2];
                         }
-
+        
                         if (letras === "CDP") {
                             documentos = "CERTIFICADO DE DISPONIBILIDAD PRESUPUESTAL";
                             categoria = "CDP";
@@ -603,7 +603,7 @@
                             newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
                         }
                     }
-
+        
                     let pageCount = 1;
                     if (extension === "PDF" && !item.folder) {
                         const contentUrl = `https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${item.id}/content`;
@@ -624,16 +624,16 @@
                         // Update newFileName with extracted PDF data
                         if (xDoc === "boletines") {
                             newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
-                        } else if (xDoc === "CDP" && letras) {
+                        } else if (xDoc === "CDP" && letras !== "") {
                             newFileName = `${letras}-${consecutivo}- ${beneficiario}`;
                         } else {
                             newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
                         }
                         updateStatus(`Procesando archivo ${index + 1}/${files.length}`, true);
                     }
-
+        
                     const columnCValue = categoria;
-
+        
                     return [
                         newFileName,
                         columnCValue,
@@ -647,22 +647,22 @@
                         item.name || "Sin nombre"
                     ];
                 }));
-
+        
                 updateStatus("Escribiendo datos en Excel...", true);
                 await Excel.run(async context => {
                     let sheet = context.workbook.worksheets.getActiveWorksheet();
                     sheet.load("name");
                     await context.sync();
                     const baseSheetName = sheet.name.split(" ")[0] || "Sheet";
-
+        
                     const initialRange = sheet.getRange("B10:K29");
                     initialRange.clear("All");
-
+        
                     for (let i = 0; i < tableData.length; i += CONFIG.recordsPerSheet) {
                         const chunk = tableData.slice(i, i + CONFIG.recordsPerSheet);
                         const fileChunk = files.slice(i, i + CONFIG.recordsPerSheet);
                         const sheetIndex = Math.floor(i / CONFIG.recordsPerSheet);
-
+        
                         if (i > 0) {
                             const newSheet = sheet.copy("After", sheet);
                             sheet = newSheet;
@@ -670,13 +670,13 @@
                             const clearRange = sheet.getRange("B10:K29");
                             clearRange.clear("All");
                         }
-
+        
                         const formatRange = sheet.getRange("B10:K29");
                         await applyFormatToRange(formatRange);
                         await writeDataToSheet(context, sheet, chunk, 10, files, i);
                         updateStatus(`Escribiendo en ${sheet.name}...`);
                     }
-
+        
                     await context.sync();
                     updateStatus(`Datos escritos en ${Math.ceil(tableData.length / CONFIG.recordsPerSheet)} hoja(s).`);
                 });
