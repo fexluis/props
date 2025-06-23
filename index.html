@@ -608,17 +608,17 @@
                         }
         
                         if (letras === "CDP") {
-                            documentos = "CERTIFICADO DE DISPONIBILIDAD PRESUPUESTAL";
+                            documentos = "N/A";
                             categoria = "CDP";
-                            newFileName = `CDP-${consecutivo}`;
+                            newFileName = `CERTIFICADO DE DISPONIBILIDAD PRESUPUESTAL ${consecutivo}`;
                         } else if (letras === "RP") {
-                            documentos = "REGISTRO PRESUPUESTAL";
+                            documentos = "N/A";
                             categoria = "RP";
-                            newFileName = `RP-${consecutivo}- ${beneficiario}`;
+                            newFileName = REGISTRO PRESUPUESTAL ${consecutivo} - ${beneficiario}`;
                         } else {
                             // Fallback if letras not found
                             categoria = "CDP";
-                            documentos = "CERTIFICADO DE DISPONIBILIDAD PRESUPUESTAL";
+                            documentos = "N/A";
                             newFileName = `CDP-${consecutivo}`;
                         }
                     }                      
