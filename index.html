@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>Boletín de Tesorería v1.07</h2>
+        <h2>Boletín de Tesorería v1.08</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -387,7 +387,8 @@
                         await initiateOAuthFlow();
                         throw new Error("Reauthentication required");
                     }
-                    throw new Error(`${errorMessage}: ${response.statusText}`);
+                    const errorText = await response.text();
+                    throw new Error(`${errorMessage}: ${response.statusText} - ${errorText}`);
                 }
                 return response.json();
             } catch (error) {
@@ -455,6 +456,7 @@
                 const file = recentData.value.find(item => item.name === fileName && item.file);
                 if (!file) {
                     updateStatus("Archivo no encontrado en recientes.");
+                    console.error("No file found in recent files matching:", fileName);
                     return;
                 }
 
@@ -465,10 +467,14 @@
                 updateStatus("Listando archivos en la carpeta padre...", true);
                 const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listar archivos");
 
+                console.log("Archivos encontrados en la carpeta padre:", childrenData.value.map(item => item.name));
+
                 const files = childrenData.value.filter(item => {
                     const ext = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toLowerCase() : "";
                     return !CONFIG.excelExtensions.includes(ext);
                 });
+
+                console.log("Archivos filtrados (no carpetas):", files.map(item => item.name));
 
                 updateStatus(`Procesando ${files.length} archivos...`, true);
                 const tableData = await Promise.all(files.map(async (item, index) => {
@@ -665,8 +671,8 @@
 
                 updateStatus(`Procesando ${files.length} archivos para renombrar...`, true);
 
-                // Updated regex to match "YYYYMMDD CDP #### Description"
-                const cdpPattern = /^(\d{8})\s*CDP\s*(\d{4})\s*(.+)$/i;
+                // Updated regex to match various CDP formats
+                const cdpPattern = /^(\d{8})\s*_?\s*CDP\s*(\d{4})\s*_?\s*(.+)$/i;
 
                 for (let i = 0; i < files.length; i++) {
                     const item = files[i];
@@ -688,19 +694,30 @@
                             .replace(/[\u0300-\u036f]/g, '')
                             .replace(/[^a-zA-Z0-9]/g, '')
                             .replace(/\s/g, '');
-                        transformedDesc = transformedDesc.charAt(0).toUpperCase() + transformedDesc.slice(1).toLowerCase();
+                        transformedDesc = transformedDesc.charAt(0).toUpperCase() + (transformedDesc.length > 1 ? transformedDesc.slice(1).toLowerCase() : '');
                         console.log(`Descripción transformada: ${transformedDesc}`);
 
                         // Construct new filename
                         let newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
                         console.log(`Nombre de archivo propuesto: ${newFileName} (${newFileName.length} caracteres)`);
 
-                        // Truncate to 30 characters
+                        // Truncate to 30 characters if necessary
                         if (newFileName.length > 30) {
                             const maxDescLength = 30 - (fecha.length + `_CDP${cdpNumber}_`.length + ext.length);
-                            transformedDesc = transformedDesc.substring(0, maxDescLength);
-                            newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
-                            console.log(`Nombre truncado a 30 caracteres: ${newFileName} (${newFileName.length} caracteres)`);
+                            if (maxDescLength > 0) {
+                                transformedDesc = transformedDesc.substring(0, maxDescLength);
+                                newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
+                                console.log(`Nombre truncado a 30 caracteres: ${newFileName} (${newFileName.length} caracteres)`);
+                            } else {
+                                console.log(`Descripción demasiado larga incluso tras truncar. Se omite: ${item.name}`);
+                                continue;
+                            }
+                        }
+
+                        // Skip renaming if the filename is already correct
+                        if (item.name === newFileName) {
+                            console.log(`Archivo "${item.name}" ya tiene el nombre correcto. Se omite.`);
+                            continue;
                         }
 
                         // Rename the file using Microsoft Graph API
@@ -731,7 +748,7 @@
                     }
                 }
 
-                updateStatus(`Renombramiento completado. Procesados ${files.length} archivos.`, false);
+                updateStatus(`Renombramiento completado. Procesados ${files.length} archivos, renombrados ${renamedFiles.length}.`, false);
                 displayRenamedFiles(renamedFiles);
             } catch (error) {
                 updateStatus(`Error: ${error.message}`);
