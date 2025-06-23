@@ -158,6 +158,7 @@
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
+            <button id="renameCDPButton" disabled>Renombrar CDP</button>
         </div>
         <div id="status" aria-live="polite">Cargando Office.js...</div>
     </div>
@@ -170,7 +171,6 @@
                 navigator.serviceWorker.register('/sw.js')
                     .then(registration => {
                         console.log('Service Worker registered with scope:', registration.scope);
-                        // Check for updates
                         registration.update();
                     })
                     .catch(error => {
@@ -183,7 +183,7 @@
         const CONFIG = {
             clientId: "c1b4b92a-ddd4-471e-a375-4fbe017f1d31",
             redirectUri: "https://fexluis.github.io/onedrive-properties-addin/popup.html",
-            scope: "Files.Read.All Sites.Read.All User.Read profile openid",
+            scope: "Files.ReadWrite.All Sites.Read.All User.Read profile openid", // Updated scope for renaming
             excelExtensions: ['xls', 'xlsx', 'xlsm', 'xlsb'],
             recordsPerSheet: 20
         };
@@ -249,6 +249,7 @@
                     updateStatus("Complemento listo.");
                     document.getElementById("runButton").disabled = false;
                     document.getElementById("getFolderIdButton").disabled = false;
+                    document.getElementById("renameCDPButton").disabled = false;
                     resolve();
                 } else {
                     const errorMsg = "Error: Office.js no se inicializó correctamente.";
@@ -319,13 +320,12 @@
             const range = sheet.getRange(`B${startRow}:K${startRow + data.length - 1}`);
             range.values = data;
             for (let i = 0; i < data.length; i++) {
-                const cell = sheet.getRange(`K${startRow + i}`);
+                const cell = sheet. getRange(`K${startRow + i}`);
                 cell.hyperlink = {
                     address: files[fileStartIndex + i].webUrl || "",
                     textToDisplay: files[fileStartIndex + i].name || "Sin nombre"
                 };
             }
-            // Format columns B and D for text wrapping
             const columnB = sheet.getRange(`B${startRow}:B${startRow + data.length - 1}`);
             const columnD = sheet.getRange(`D${startRow}:D${startRow + data.length - 1}`);
             columnB.format.wrapText = true;
@@ -377,14 +377,12 @@
                     razonSocial: "Error"
                 };
 
-                // Process only page 1
                 const page = await pdf.getPage(1);
                 const textContent = await page.getTextContent();
                 const textItems = textContent.items.map(item => item.str);
 
                 console.log(`Extracted text from page 1 of ${url}:`, textItems);
 
-                // Iterate through text items to find labels and their values
                 for (let i = 0; i < textItems.length - 2; i++) {
                     const currentItem = textItems[i].trim();
                     if (currentItem === "ORDEN DE PAGO PRESUPUESTAL" && i + 2 < textItems.length) {
@@ -457,7 +455,7 @@
                     if (event.origin !== "https://fexluis.github.io") return;
                     if (event.data.accessToken) {
                         localStorage.setItem("accessToken", event.data.accessToken);
-                        updateStatus("Token obtenido. Haz clic en 'Listar Archivos en Excel' nuevamente.");
+                        updateStatus("Token obtenido. Haz clic nuevamente en el botón.");
                         authWindow.close();
                         window.removeEventListener("message", handler);
                         resolve();
@@ -531,21 +529,16 @@
                     const extension = item.name.includes('.') && !item.folder ? item.name.split('.').pop().toUpperCase() : "";
                     const nameWithoutExtension = item.name.includes('.') ? item.name.substring(0, item.name.lastIndexOf('.')) : item.name;
 
-                    // Split file name by "_" to extract components
                     const fileNameParts = nameWithoutExtension.split("_");
                     let fileCreateDate = fileNameParts[0] || "";
                     let obligacion = fileNameParts[1] || "";
                     let categoria = fileNameParts[2] || "";
                     let documentos = "";
 
-                    // Apply conditional logic for categoria and documentos
                     if (categoria === "Via") {
                         categoria = "VIATICO";
                         documentos = "ORDEN DE PAGO, OBLIGACION, SOLICITUD, AUTORIZACIÓN, REGISTRO PRESUPUESTAL, INFORME, CERTIFICADO CUMPLIMIENTO";
-                    } else if (categoria === "Vian") {
-                        categoria = "ANTICIPO VIATICO";
-                        documentos = "ORDEN DE PAGO, OBLIGACION, SOLICITUD, AUTORIZACIÓN, REGISTRO PRESUPUESTAL";
-                    } else if (categoria === "ViaAnt") {
+                    } else if (categoria === "Vian" || categoria === "ViaAnt") {
                         categoria = "ANTICIPO VIATICO";
                         documentos = "ORDEN DE PAGO, OBLIGACION, SOLICITUD, AUTORIZACIÓN, REGISTRO PRESUPUESTAL";
                     } else if (categoria === "Hon") {
@@ -592,11 +585,9 @@
                         documentos = "ORDEN DE PAGO, OBLIGACION, FACTURA, DOCUMENTOS";
                     }
 
-                    // Default values for numOP and beneficiario
                     let numOP = "00000";
                     let beneficiario = "BENEFICIARIO";
 
-                    // Construct newFileName
                     let newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
 
                     let pageCount = 1;
@@ -623,16 +614,16 @@
                     const columnCValue = categoria;
 
                     return [
-                        newFileName,                       // Columna B
-                        columnCValue,                      // Columna C
-                        documentos,                        // Columna D
-                        formattedCreateDate,               // Columna E
-                        formattedModifiedDate,             // Columna F
-                        1,                                 // Columna G
-                        pageCount,                         // Columna H
-                        extension,                         // Columna I
-                        `${sizeInKB.toFixed(2)} KB`,       // Columna J
-                        item.name || "Sin nombre"          // Columna K
+                        newFileName,
+                        columnCValue,
+                        documentos,
+                        formattedCreateDate,
+                        formattedModifiedDate,
+                        1,
+                        pageCount,
+                        extension,
+                        `${sizeInKB.toFixed(2)} KB`,
+                        item.name || "Sin nombre"
                     ];
                 }));
 
@@ -674,10 +665,112 @@
             }
         }
 
+        /**
+         * Renames files in the parent folder matching the pattern fecha_CDP####_Descripcion.
+         * @returns {Promise<void>}
+         * @dependencies officeReady, Excel.run, fetchWithAuth
+         */
+        async function renameCDPFiles() {
+            try {
+                await officeReady;
+                let accessToken = localStorage.getItem("accessToken");
+                if (!accessToken) {
+                    await initiateOAuthFlow();
+                    return;
+                }
+
+                updateStatus("Obteniendo nombre del archivo...", true);
+                let fileName;
+                await Excel.run(async context => {
+                    const workbook = context.workbook;
+                    workbook.load("name");
+                    await context.sync();
+                    fileName = workbook.name;
+                    updateStatus(`Nombre del archivo: ${fileName}`);
+                });
+
+                updateStatus("Obteniendo drive raíz...", true);
+                const rootData = await fetchWithAuth("https://graph.microsoft.com/v1.0/me/drive/root", accessToken, "Error al obtener la raíz");
+                const driveId = rootData.parentReference.driveId;
+                updateStatus(`Drive ID de la raíz: ${driveId}`);
+
+                updateStatus("Buscando archivo reciente...", true);
+                const recentData = await fetchWithAuth("https://graph.microsoft.com/v1.0/me/drive/recent", accessToken, "Error al obtener archivos recientes");
+                const file = recentData.value.find(item => item.name === fileName && item.file);
+                if (!file) {
+                    updateStatus("Archivo no encontrado en recientes.");
+                    return;
+                }
+
+                const parentFolderId = file.parentReference.id;
+                const fileDriveId = file.parentReference.driveId;
+                updateStatus(`ID de la carpeta padre: ${parentFolderId}`);
+
+                updateStatus("Listando archivos en la carpeta padre...", true);
+                const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listar archivos");
+
+                const files = childrenData.value.filter(item => !item.folder);
+
+                updateStatus(`Procesando ${files.length} archivos para renombrar...`, true);
+
+                const cdpPattern = /^(\d{8})_CDP(\d{4})_(.+)$/i;
+
+                for (let i = 0; i < files.length; i++) {
+                    const item = files[i];
+                    const ext = item.name.includes('.') ? `.${item.name.split('.').pop()}` : '';
+                    const nameWithoutExtension = item.name.replace(ext, '');
+                    const match = nameWithoutExtension.match(cdpPattern);
+
+                    if (match) {
+                        const [, fecha, cdpNumber, descripcion] = match;
+
+                        // Transform description: capitalize first letter, remove spaces
+                        let transformedDesc = descripcion.charAt(0).toUpperCase() + descripcion.slice(1).toLowerCase();
+                        transformedDesc = transformedDesc.replace(/\s/g, '');
+
+                        // Construct new filename
+                        let newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
+
+                        // Truncate to 30 characters (including extension)
+                        if (newFileName.length > 30) {
+                            const maxDescLength = 30 - (fecha.length + `_CDP${cdpNumber}_`.length + ext.length);
+                            transformedDesc = transformedDesc.substring(0, maxDescLength);
+                            newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
+                        }
+
+                        // Rename the file using Microsoft Graph API
+                        const renameUrl = `https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${item.id}`;
+                        const renameResponse = await fetch(renameUrl, {
+                            method: 'PATCH',
+                            headers: {
+                                "Authorization": `Bearer ${accessToken}`,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                name: newFileName
+                            })
+                        });
+
+                        if (!renameResponse.ok) {
+                            throw new Error(`Error al renombrar ${item.name}: ${renameResponse.statusText}`);
+                        }
+
+                        updateStatus(`Renombrado ${item.name} a ${newFileName}`, true);
+                    }
+                }
+
+                updateStatus(`Renombramiento completado. Procesados ${files.length} archivos.`);
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`);
+                console.error("Error in renameCDPFiles:", error);
+            }
+        }
+
         // === EVENT LISTENERS ===
         officeReady.then(() => {
             document.getElementById("runButton").onclick = run;
             document.getElementById("getFolderIdButton").onclick = listFilesInParentFolder;
+            document.getElementById("renameCDPButton").onclick = renameCDPFiles;
         });
     </script>
     <!-- === JAVASCRIPT MODULES END === -->
