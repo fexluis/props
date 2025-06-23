@@ -358,6 +358,7 @@
 
                 const result = {
                     numero: "Error",
+                    numeroRP: "Error",
                     fechaRegistro: "Error",
                     razonSocial: "Error"
                 };
@@ -374,6 +375,10 @@
                         const value = textItems[i + 2].trim();
                         if (value) result.numero = value.toUpperCase();
                     }
+                    if (currentItem === "Número:" && i + 2 < textItems.length) {
+                        const value = textItems[i + 2].trim();
+                        if (value) result.numeroRP = value;
+                    }
                     if (currentItem === "Fecha Registro:" && i + 2 < textItems.length) {
                         const value = textItems[i + 2].trim();
                         if (value) result.fechaRegistro = value;
@@ -386,6 +391,7 @@
 
                 console.log(`Extracted values from page 1 of ${url}:`, {
                     "ORDEN DE PAGO PRESUPUESTAL": result.numero,
+                    "numeroRP:": result.numeroRP,
                     "Fecha Registro:": result.fechaRegistro,
                     "Razón Social:": result.razonSocial
                 });
@@ -512,7 +518,8 @@
                     let numOP = "00000";
                     let beneficiario = "BENEFICIARIO";
                     let letras = ""; 
-                    let consecutivo = ""; 
+                    let consecutivo = "";
+                    let numeroRP = "";                    
 
                     let pageCount = 1;
                     if (extension === "PDF" && !item.folder) {
@@ -521,6 +528,9 @@
                         const pdfText = await getPDFText(contentUrl, accessToken);
                         if (pdfText.numero !== "Error") {
                             numOP = pdfText.numero;
+                        }
+                        if (pdfText.numeroRP !== "Error") {
+                            numeroRP = pdfText.numeroRP;
                         }
                         if (pdfText.razonSocial !== "Error") {
                             beneficiario = pdfText.razonSocial;
@@ -614,7 +624,7 @@
                         } else if (letras === "RP") {
                             documentos = "N/A";
                             categoria = "RP";
-                            newFileName = `REGISTRO PRESUPUESTAL ${consecutivo} - ${beneficiario}`;
+                            newFileName = `RP ${numeroRP} - ${beneficiario}`;
                         } else {
                             // Fallback if letras not found
                             categoria = "CDP";
