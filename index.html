@@ -119,7 +119,6 @@
             100% { transform: rotate(360deg); }
         }
 
-        /* Fallback for older browsers */
         @media (prefers-reduced-motion: reduce) {
             .spinner {
                 animation: none;
@@ -127,7 +126,6 @@
             }
         }
 
-        /* Responsive Design */
         @media (max-width: 600px) {
             .container {
                 padding: 16px;
@@ -143,7 +141,6 @@
             }
         }
 
-        /* Accessibility */
         button:focus {
             outline: 3px solid var(--primary-color);
             outline-offset: 2px;
@@ -172,9 +169,8 @@
     <!-- === STYLES MODULE END === -->
 </head>
 <body>
-    <!-- Single container for all content -->
     <div class="container">
-        <h2>Boletín de Tesorería v1.05</h2>
+        <h2>Boletín de Tesorería v1.06</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -187,6 +183,8 @@
     <!-- === JAVASCRIPT MODULES START === -->
     <script type="module">
         // === SERVICE WORKER REGISTRATION ===
+        // Commented out due to 404 error for sw.js
+        /*
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('/sw.js')
@@ -199,6 +197,7 @@
                     });
             });
         }
+        */
 
         // === CONFIG MODULE ===
         const CONFIG = {
@@ -210,11 +209,6 @@
         };
 
         // === UTILITIES MODULE ===
-        /**
-         * Formats a date to YYYYMMDD.
-         * @param {Date} date - The date to format.
-         * @returns {string} Formatted date string in YYYYMMDD format.
-         */
         function formatDate(date) {
             const year = date.getFullYear();
             const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -222,11 +216,6 @@
             return `${year}${month}${day}`;
         }
 
-        /**
-         * Converts a date string (YYYY-MM-DD) to YYYYMMDD format.
-         * @param {string} dateStr - The date string to convert.
-         * @returns {string} Formatted date string in YYYYMMDD format or "Error" if invalid.
-         */
         function formatDateString(dateStr) {
             try {
                 const [year, month, day] = dateStr.split('-').map(Number);
@@ -240,15 +229,8 @@
             }
         }
 
-        /**
-         * Updates status message with optional loading state.
-         * @param {string} message - The status message.
-         * @param {boolean} [isLoading=false] - Whether to show spinner.
-         */
         function updateStatus(message, isLoading = false) {
             const statusDiv = document.getElementById("status");
-           oxy
-
             statusDiv.innerHTML = ''; // Clear previous content
             statusDiv.textContent = message;
             statusDiv.setAttribute("aria-busy", isLoading);
@@ -259,10 +241,6 @@
             }
         }
 
-        /**
-         * Displays renamed files in the UI.
-         * @param {Array<{oldName: string, newName: string}>} renamedFiles - Array of objects with old and new filenames.
-         */
         function displayRenamedFiles(renamedFiles) {
             const resultsDiv = document.getElementById("renameResults");
             if (renamedFiles.length === 0) {
@@ -280,11 +258,6 @@
         }
 
         // === OFFICE MODULE ===
-        /**
-         * Initializes Office.js and enables buttons on success.
-         * @returns {Promise<void>}
-         * @dependencies Office.js
-         */
         const officeReady = new Promise((resolve, reject) => {
             Office.onReady(info => {
                 if (info.host && info.platform) {
@@ -308,11 +281,6 @@
             });
         });
 
-        /**
-         * Writes "Hello from Office.js!" to cell A1 in the active worksheet.
-         * @returns {Promise<void>}
-         * @dependencies Excel.run, officeReady
-         */
         async function run() {
             try {
                 await officeReady;
@@ -320,7 +288,7 @@
                     const sheet = context.workbook.worksheets.getActiveWorksheet();
                     sheet.getRange("A1").values = [["¡Hola desde Office.js!"]];
                     await context.sync();
-                    updateStatus("¡Escrito en A1 con éxito!", false);
+                    updateStatus("¡Escrito A1 con éxito!", false);
                 });
             } catch (error) {
                 updateStatus(`Error en run: ${error.message}`);
@@ -328,12 +296,6 @@
             }
         }
 
-        /**
-         * Applies formatting to a specified range.
-         * @param {Excel.Range} range - The range to format.
-         * @returns {Promise<void>}
-         * @dependencies Excel.run
-         */
         async function applyFormatToRange(range) {
             range.format.borders.getItem("EdgeBottom").style = "Continuous";
             range.format.borders.getItem("EdgeLeft").style = "Continuous";
@@ -348,17 +310,6 @@
             range.format.autofitColumns();
         }
 
-        /**
-         * Writes data to a worksheet with hyperlinks and formats columns B and D for text wrapping.
-         * @param {Excel.Context} context - The Excel context.
-         * @param {Excel.Worksheet} sheet - The target worksheet.
-         * @param {Array<Array<string>>} data - The data ascended data to write.
-         * @param {number} startRow - Starting row for data.
-         * @param {Array<object>} files - File metadata for hyperlinks.
-         * @param {number} fileStartIndex - Starting index for files.
-         * @returns {Promise<void>}
-         * @dependencies Excel.run
-         */
         async function writeDataToSheet(context, sheet, data, startRow, files, fileStartIndex) {
             const range = sheet.getRange(`B${startRow}:K${startRow + data.length - 1}`);
             range.values = data;
@@ -378,13 +329,6 @@
         }
 
         // === PDF PROCESSING MODULE ===
-        /**
-         * Gets the page count of a PDF file.
-         * @param {string} url - The PDF content URL.
-         * @param {string} accessToken - The access token.
-         * @returns {Promise<number|string>} Page count or "Error".
-         * @dependencies pdf.js
-         */
         async function getPDFPageCount(url, accessToken) {
             console.log(`Getting page count for ${url}`);
             try {
@@ -399,13 +343,6 @@
             }
         }
 
-        /**
-         * Extracts text following "ORDEN DE PAGO PRESUPUESTAL", "Fecha Registro:", and "Razón Social:" from page 1 of a PDF.
-         * @param {string} url - The PDF content URL.
-         * @param {string} accessToken - The access token.
-         * @returns {Promise<object>} Object with numero, fechaRegistro, razonSocial, or "Error" if not found.
-         * @dependencies pdf.js
-         */
         async function getPDFText(url, accessToken) {
             console.log(`Searching text in ${url} (page 1 only)`);
             try {
@@ -456,14 +393,6 @@
         }
 
         // === AUTHENTICATION MODULE ===
-        /**
-         * Fetches data with authentication, handling token expiration.
-         * @param {string} url - The API endpoint.
-         * @param {string} accessToken - The access token.
-         * @param {string} errorMessage - Error message prefix.
-         * @returns {Promise<object>} The API response data.
-         * @dependencies initiateOAuthFlow
-         */
         async function fetchWithAuth(url, accessToken, errorMessage) {
             console.log(`Fetching ${url}`);
             const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
@@ -479,10 +408,6 @@
             return response.json();
         }
 
-        /**
-         * Initiates OAuth flow for Microsoft Graph access.
-         * @returns {Promise<void>}
-         */
         async function initiateOAuthFlow() {
             return new Promise((resolve, reject) => {
                 const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${encodeURIComponent(CONFIG.clientId)}&response_type=token&redirect_uri=${encodeURIComponent(CONFIG.redirectUri)}&scope=${encodeURIComponent(CONFIG.scope)}&response_mode=fragment&prompt=consent`;
@@ -513,11 +438,6 @@
         }
 
         // === MAIN LOGIC MODULE ===
-        /**
-         * Lists files in the parent folder of the current Excel file and writes to sheets.
-         * @returns {Promise<void>}
-         * @dependencies officeReady, Excel.run, fetchWithAuth, getPDFPageCount, getPDFText, writeDataToSheet, applyFormatToRange
-         */
         async function listFilesInParentFolder() {
             try {
                 await officeReady;
@@ -708,11 +628,6 @@
             }
         }
 
-        /**
-         * Renames files in the parent folder matching the pattern fecha_CDP####_Descripcion.
-         * @returns {Promise<void>}
-         * @dependencies officeReady, Excel.run, fetchWithAuth
-         */
         async function renameCDPFiles() {
             try {
                 await officeReady;
@@ -768,25 +683,21 @@
                     if (match) {
                         const [, fecha, cdpNumber, descripcion] = match;
 
-                        // Transform description: capitalize first letter, remove spaces, accents, and special characters
                         let transformedDesc = descripcion
-                            .normalize('NFD') // Remove accents
-                            .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
-                            .replace(/[^a-zA-Z0-9]/g, '') // Keep only letters and numbers
-                            .replace(/\s/g, ''); // Remove spaces
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .replace(/[^a-zA-Z0-9]/g, '')
+                            .replace(/\s/g, '');
                         transformedDesc = transformedDesc.charAt(0).toUpperCase() + transformedDesc.slice(1).toLowerCase();
 
-                        // Construct new filename
                         let newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
 
-                        // Truncate to 30 characters (including extension)
                         if (newFileName.length > 30) {
                             const maxDescLength = 30 - (fecha.length + `_CDP${cdpNumber}_`.length + ext.length);
                             transformedDesc = transformedDesc.substring(0, maxDescLength);
                             newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
                         }
 
-                        // Rename the file using Microsoft Graph API
                         const renameUrl = `https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${item.id}`;
                         const renameResponse = await fetch(renameUrl, {
                             method: 'PATCH',
