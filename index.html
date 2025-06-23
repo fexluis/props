@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>Boletín de Tesorería v1.10</h2>
+        <h2>Boletín de Tesorería v1.11</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -688,11 +688,12 @@
                 console.log("Archivos filtrados (no carpetas):", files.map(item => item.name));
 
                 const renamedFiles = [];
+                let xLetras = null; // Initialize xLetras
 
                 updateStatus(`Procesando ${files.length} archivos para renombrar...`, true);
 
-                // Updated regex to match YYYYMMDD[separators][CDP or missing]Consecutive[separators]Description
-                const cdpPattern = /^(\d{8,9})(\s*_?\s*(?:CDP)?\s*_?\s*)(\d{3,6})\s*_?\s*(.+)$/i;
+                // Updated regex to match YYYYMMDD[separators][CDP|RP or missing]Consecutive[separators]Description
+                const cdpPattern = /^(\d{8,9})(\s*_?\s*(?:CDP|RP)?\s*_?\s*)(\d{3,6})\s*_?\s*(.+)$/i;
 
                 for (let i = 0; i < files.length; i++) {
                     const item = files[i];
@@ -705,8 +706,27 @@
                     console.log(`Resultado de cdpPattern en "${nameWithoutExtension}":`, match);
 
                     if (match) {
-                        let [, dateStr, , consecutive, descripcion] = match;
-                        console.log(`Coincidencia encontrada: fecha=${dateStr}, consecutivo=${consecutive}, descripcion=${descripcion}`);
+                        let [, dateStr, letrasMatch, consecutive, descripcion] = match;
+                        console.log(`Coincidencia encontrada: fecha=${dateStr}, letras=${letrasMatch.trim() || '""'}, consecutivo=${consecutive}, descripcion=${descripcion}`);
+
+                        // Extract letras (CDP or RP) or set to empty
+                        let letras = letrasMatch.match(/CDP|RP/i) ? letrasMatch.match(/CDP|RP/i)[0] : '';
+                        console.log(`Letras extraídas: ${letras || '""'}`);
+
+                        // Set xLetras from the first matched file
+                        if (xLetras === null && letras) {
+                            xLetras = letras.toUpperCase();
+                            console.log(`Asignar variable: xLetras = "${xLetras}"`);
+                        }
+
+                        // If letras is empty, use xLetras
+                        if (!letras && xLetras) {
+                            letras = xLetras;
+                            console.log(`Letras vacías, usando xLetras: ${letras}`);
+                        } else if (!letras) {
+                            console.log(`No se encontraron letras y xLetras no está definido. Se omite: ${item.name}`);
+                            continue;
+                        }
 
                         // Validate and correct date
                         const { valid, date, consecutive: correctedConsecutive } = validateAndCorrectDate(dateStr, consecutive);
@@ -725,15 +745,15 @@
                         console.log(`Descripción transformada: ${transformedDesc}`);
 
                         // Construct new filename
-                        let newFileName = `${date}_CDP${correctedConsecutive}_${transformedDesc}${ext}`;
+                        let newFileName = `${date}_${letras}${correctedConsecutive}_${transformedDesc}${ext}`;
                         console.log(`Nombre de archivo propuesto: ${newFileName} (${newFileName.length} caracteres)`);
 
                         // Truncate to 30 characters if necessary
                         if (newFileName.length > 30) {
-                            const maxDescLength = 30 - (date.length + `_CDP${correctedConsecutive}_`.length + ext.length);
+                            const maxDescLength = 30 - (date.length + `_${letras}${correctedConsecutive}_`.length + ext.length);
                             if (maxDescLength > 0) {
                                 transformedDesc = transformedDesc.substring(0, maxDescLength);
-                                newFileName = `${date}_CDP${correctedConsecutive}_${transformedDesc}${ext}`;
+                                newFileName = `${date}_${letras}${correctedConsecutive}_${transformedDesc}${ext}`;
                                 console.log(`Nombre truncado a 30 caracteres: ${newFileName} (${newFileName.length} caracteres)`);
                             } else {
                                 console.log(`Descripción demasiado larga incluso tras truncar. Se omite: ${item.name}`);
@@ -771,7 +791,7 @@
                         updateStatus(`Renombrado ${item.name} a ${newFileName}`, true);
                         console.log(`Archivo renombrado exitosamente: ${item.name} → ${newFileName}`);
                     } else {
-                        console.log(`Archivo "${item.name}" no coincide con el patrón CDP. Se omite.`);
+                        console.log(`Archivo "${item.name}" no coincide con el patrón CDP/RP. Se omite.`);
                     }
                 }
 
