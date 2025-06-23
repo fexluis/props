@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>Boletín de Tesorería v1.18</h2>
+        <h2>Boletín de Tesorería v1.19</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -355,21 +355,33 @@
                 if (!response.ok) throw new Error(`Error downloading PDF: ${response.statusText}`);
                 const arrayBuffer = await response.arrayBuffer();
                 const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-
+        
                 const result = {
                     numero: "Error",
                     numeroRP: "Error",
                     fechaRegistro: "Error",
                     razonSocial: "Error"
                 };
-
+        
                 const page = await pdf.getPage(1);
                 const textContent = await page.getTextContent();
                 const textItems = textContent.items.map(item => item.str);
-
+        
                 console.log(`Extracted text from page 1 of ${url}:`, textItems);
-
-                for (let i = 0; i < textItems.length - 2; i++) {
+        
+                // Find index of "Unidad / Subunidad Ejecutora:" or "Unidad / Subunidad"
+                let unidadIndex = textItems.findIndex(item => 
+                    item.trim() === "Unidad / Subunidad Ejecutora:" || 
+                    item.trim() === "Unidad / Subunidad" ||
+                    item.trim() === "Unidad / Subunidad ejecutora:"
+                );
+                if (unidadIndex === -1) {
+                    // Fallback: search entire array if not found
+                    unidadIndex = textItems.length;
+                }
+        
+                // Search for "Número:" and "Fecha Registro:" before unidadIndex
+                for (let i = 0; i < unidadIndex; i++) {
                     const currentItem = textItems[i].trim();
                     if (currentItem === "ORDEN DE PAGO PRESUPUESTAL" && i + 2 < textItems.length) {
                         const value = textItems[i + 2].trim();
@@ -383,19 +395,24 @@
                         const value = textItems[i + 2].trim();
                         if (value) result.fechaRegistro = value;
                     }
+                }
+        
+                // Search for "Razón Social:" in the entire array
+                for (let i = 0; i < textItems.length - 2; i++) {
+                    const currentItem = textItems[i].trim();
                     if (currentItem === "Razón Social:" && i + 2 < textItems.length) {
                         const value = textItems[i + 2].trim();
                         if (value) result.razonSocial = value.toUpperCase();
                     }
                 }
-
+        
                 console.log(`Extracted values from page 1 of ${url}:`, {
                     "ORDEN DE PAGO PRESUPUESTAL": result.numero,
-                    "numeroRP:": result.numeroRP,
-                    "Fecha Registro:": result.fechaRegistro,
-                    "Razón Social:": result.razonSocial
+                    "numeroRP": result.numeroRP,
+                    "Fecha Registro": result.fechaRegistro,
+                    "Razón Social": result.razonSocial
                 });
-
+        
                 return result;
             } catch (error) {
                 console.error(`Error processing PDF ${url}:`, error);
