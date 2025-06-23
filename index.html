@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>Boletín de Tesorería v1.08</h2>
+        <h2>Boletín de Tesorería v1.10</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -210,6 +210,26 @@
                 console.error(`Error formatting date string "${dateStr}":`, error.message);
                 return "Error";
             }
+        }
+
+        function validateAndCorrectDate(dateStr, consecutive) {
+            let correctedDate = dateStr;
+            let correctedConsecutive = consecutive;
+            if (dateStr.length > 8) {
+                console.log(`Fecha "${dateStr}" tiene más de 8 dígitos. Tomando los primeros 8: ${dateStr.slice(0, 8)}`);
+                correctedDate = dateStr.slice(0, 8);
+                correctedConsecutive = dateStr.slice(8) + consecutive;
+                console.log(`Consecutivo corregido: ${correctedConsecutive}`);
+            }
+            const year = parseInt(correctedDate.slice(0, 4));
+            const month = parseInt(correctedDate.slice(4, 6)) - 1;
+            const day = parseInt(correctedDate.slice(6, 8));
+            const date = new Date(year, month, day);
+            if (isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
+                console.log(`Fecha "${correctedDate}" no es válida.`);
+                return { valid: false, date: correctedDate, consecutive: correctedConsecutive };
+            }
+            return { valid: true, date: correctedDate, consecutive: correctedConsecutive };
         }
 
         function updateStatus(message, isLoading = false) {
@@ -671,8 +691,8 @@
 
                 updateStatus(`Procesando ${files.length} archivos para renombrar...`, true);
 
-                // Updated regex to match various CDP formats
-                const cdpPattern = /^(\d{8})\s*_?\s*CDP\s*(\d{4})\s*_?\s*(.+)$/i;
+                // Updated regex to match YYYYMMDD[separators][CDP or missing]Consecutive[separators]Description
+                const cdpPattern = /^(\d{8,9})(\s*_?\s*(?:CDP)?\s*_?\s*)(\d{3,6})\s*_?\s*(.+)$/i;
 
                 for (let i = 0; i < files.length; i++) {
                     const item = files[i];
@@ -685,8 +705,15 @@
                     console.log(`Resultado de cdpPattern en "${nameWithoutExtension}":`, match);
 
                     if (match) {
-                        const [, fecha, cdpNumber, descripcion] = match;
-                        console.log(`Coincidencia encontrada: fecha=${fecha}, cdpNumber=${cdpNumber}, descripcion=${descripcion}`);
+                        let [, dateStr, , consecutive, descripcion] = match;
+                        console.log(`Coincidencia encontrada: fecha=${dateStr}, consecutivo=${consecutive}, descripcion=${descripcion}`);
+
+                        // Validate and correct date
+                        const { valid, date, consecutive: correctedConsecutive } = validateAndCorrectDate(dateStr, consecutive);
+                        if (!valid) {
+                            console.log(`Archivo "${item.name}" tiene una fecha inválida: ${date}. Se omite.`);
+                            continue;
+                        }
 
                         // Transform description
                         let transformedDesc = descripcion
@@ -698,15 +725,15 @@
                         console.log(`Descripción transformada: ${transformedDesc}`);
 
                         // Construct new filename
-                        let newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
+                        let newFileName = `${date}_CDP${correctedConsecutive}_${transformedDesc}${ext}`;
                         console.log(`Nombre de archivo propuesto: ${newFileName} (${newFileName.length} caracteres)`);
 
                         // Truncate to 30 characters if necessary
                         if (newFileName.length > 30) {
-                            const maxDescLength = 30 - (fecha.length + `_CDP${cdpNumber}_`.length + ext.length);
+                            const maxDescLength = 30 - (date.length + `_CDP${correctedConsecutive}_`.length + ext.length);
                             if (maxDescLength > 0) {
                                 transformedDesc = transformedDesc.substring(0, maxDescLength);
-                                newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
+                                newFileName = `${date}_CDP${correctedConsecutive}_${transformedDesc}${ext}`;
                                 console.log(`Nombre truncado a 30 caracteres: ${newFileName} (${newFileName.length} caracteres)`);
                             } else {
                                 console.log(`Descripción demasiado larga incluso tras truncar. Se omite: ${item.name}`);
