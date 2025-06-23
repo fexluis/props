@@ -148,6 +148,26 @@
             outline: 3px solid var(--primary-color);
             outline-offset: 2px;
         }
+
+        #renameResults {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: var(--border-radius);
+            background-color: #f8f9fa;
+            text-align: left;
+            font-size: 0.9rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        #renameResults ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        #renameResults li {
+            padding: 4px 0;
+        }
     </style>
     <!-- === STYLES MODULE END === -->
 </head>
@@ -161,6 +181,7 @@
             <button id="renameCDPButton" disabled>Renombrar CDP</button>
         </div>
         <div id="status" aria-live="polite">Cargando Office.js...</div>
+        <div id="renameResults"></div>
     </div>
 
     <!-- === JAVASCRIPT MODULES START === -->
@@ -183,7 +204,7 @@
         const CONFIG = {
             clientId: "c1b4b92a-ddd4-471e-a375-4fbe017f1d31",
             redirectUri: "https://fexluis.github.io/onedrive-properties-addin/popup.html",
-            scope: "Files.ReadWrite.All Sites.Read.All User.Read profile openid", // Updated scope for renaming
+            scope: "Files.ReadWrite.All Sites.Read.All User.Read profile openid",
             excelExtensions: ['xls', 'xlsx', 'xlsm', 'xlsb'],
             recordsPerSheet: 20
         };
@@ -226,6 +247,8 @@
          */
         function updateStatus(message, isLoading = false) {
             const statusDiv = document.getElementById("status");
+           oxy
+
             statusDiv.innerHTML = ''; // Clear previous content
             statusDiv.textContent = message;
             statusDiv.setAttribute("aria-busy", isLoading);
@@ -234,6 +257,26 @@
                 spinner.className = "spinner";
                 statusDiv.appendChild(spinner);
             }
+        }
+
+        /**
+         * Displays renamed files in the UI.
+         * @param {Array<{oldName: string, newName: string}>} renamedFiles - Array of objects with old and new filenames.
+         */
+        function displayRenamedFiles(renamedFiles) {
+            const resultsDiv = document.getElementById("renameResults");
+            if (renamedFiles.length === 0) {
+                resultsDiv.innerHTML = '<p>No se renombraron archivos.</p>';
+                return;
+            }
+            const ul = document.createElement("ul");
+            renamedFiles.forEach(file => {
+                const li = document.createElement("li");
+                li.textContent = `${file.oldName} → ${file.newName}`;
+                ul.appendChild(li);
+            });
+            resultsDiv.innerHTML = '<p>Archivos renombrados:</p>';
+            resultsDiv.appendChild(ul);
         }
 
         // === OFFICE MODULE ===
@@ -309,7 +352,7 @@
          * Writes data to a worksheet with hyperlinks and formats columns B and D for text wrapping.
          * @param {Excel.Context} context - The Excel context.
          * @param {Excel.Worksheet} sheet - The target worksheet.
-         * @param {Array<Array<string>>} data - The data to write.
+         * @param {Array<Array<string>>} data - The data ascended data to write.
          * @param {number} startRow - Starting row for data.
          * @param {Array<object>} files - File metadata for hyperlinks.
          * @param {number} fileStartIndex - Starting index for files.
@@ -320,7 +363,7 @@
             const range = sheet.getRange(`B${startRow}:K${startRow + data.length - 1}`);
             range.values = data;
             for (let i = 0; i < data.length; i++) {
-                const cell = sheet. getRange(`K${startRow + i}`);
+                const cell = sheet.getRange(`K${startRow + i}`);
                 cell.hyperlink = {
                     address: files[fileStartIndex + i].webUrl || "",
                     textToDisplay: files[fileStartIndex + i].name || "Sin nombre"
@@ -710,6 +753,7 @@
                 const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listar archivos");
 
                 const files = childrenData.value.filter(item => !item.folder);
+                const renamedFiles = [];
 
                 updateStatus(`Procesando ${files.length} archivos para renombrar...`, true);
 
@@ -724,9 +768,13 @@
                     if (match) {
                         const [, fecha, cdpNumber, descripcion] = match;
 
-                        // Transform description: capitalize first letter, remove spaces
-                        let transformedDesc = descripcion.charAt(0).toUpperCase() + descripcion.slice(1).toLowerCase();
-                        transformedDesc = transformedDesc.replace(/\s/g, '');
+                        // Transform description: capitalize first letter, remove spaces, accents, and special characters
+                        let transformedDesc = descripcion
+                            .normalize('NFD') // Remove accents
+                            .replace(/[\u0300-\u036f]/g, '') // Remove diacritical marks
+                            .replace(/[^a-zA-Z0-9]/g, '') // Keep only letters and numbers
+                            .replace(/\s/g, ''); // Remove spaces
+                        transformedDesc = transformedDesc.charAt(0).toUpperCase() + transformedDesc.slice(1).toLowerCase();
 
                         // Construct new filename
                         let newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
@@ -755,11 +803,13 @@
                             throw new Error(`Error al renombrar ${item.name}: ${renameResponse.statusText}`);
                         }
 
+                        renamedFiles.push({ oldName: item.name, newName: newFileName });
                         updateStatus(`Renombrado ${item.name} a ${newFileName}`, true);
                     }
                 }
 
-                updateStatus(`Renombramiento completado. Procesados ${files.length} archivos.`);
+                updateStatus(`Renombramiento completado. Procesados ${files.length} archivos.`, false);
+                displayRenamedFiles(renamedFiles);
             } catch (error) {
                 updateStatus(`Error: ${error.message}`);
                 console.error("Error in renameCDPFiles:", error);
