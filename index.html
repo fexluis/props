@@ -511,8 +511,26 @@
                     let fileCreateDate, obligacion, categoria, documentos, newFileName;
                     let numOP = "00000";
                     let beneficiario = "BENEFICIARIO";
-                    let letras = ""; // Declare letras at higher scope
-                    let consecutivo = ""; // Declare consecutivo at higher scope
+                    let letras = ""; 
+                    let consecutivo = ""; 
+
+                    let pageCount = 1;
+                    if (extension === "PDF" && !item.folder) {
+                        const contentUrl = `https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${item.id}/content`;
+                        pageCount = await getPDFPageCount(contentUrl, accessToken);
+                        const pdfText = await getPDFText(contentUrl, accessToken);
+                        if (pdfText.numero !== "Error") {
+                            numOP = pdfText.numero;
+                        }
+                        if (pdfText.razonSocial !== "Error") {
+                            beneficiario = pdfText.razonSocial;
+                        }
+                        if (pdfText.fechaRegistro !== "Error") {
+                            const formattedDate = formatDateString(pdfText.fechaRegistro);
+                            if (formattedDate !== "Error") {
+                                formattedCreateDate = formattedDate;
+                            }
+                        }
         
                     if (xDoc === "boletines") {
                         const fileNameParts = nameWithoutExtension.split("_");
@@ -572,6 +590,7 @@
                         }
         
                         newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
+                        
                     } else if (xDoc === "CDP") {
                         const fileNameParts = nameWithoutExtension.split("_");
                         fileCreateDate = fileNameParts[0] || "";
@@ -591,44 +610,19 @@
                         if (letras === "CDP") {
                             documentos = "CERTIFICADO DE DISPONIBILIDAD PRESUPUESTAL";
                             categoria = "CDP";
-                            newFileName = `CDP-${consecutivo}- ${beneficiario}`;
+                            newFileName = `CDP-${consecutivo}`;
                         } else if (letras === "RP") {
                             documentos = "REGISTRO PRESUPUESTAL";
                             categoria = "RP";
                             newFileName = `RP-${consecutivo}- ${beneficiario}`;
                         } else {
                             // Fallback if letras not found
-                            categoria = "PROVEEDOR";
-                            documentos = "ORDEN DE PAGO, OBLIGACION, FACTURA, DOCUMENTOS";
-                            newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
+                            categoria = "CDP";
+                            documentos = "CERTIFICADO DE DISPONIBILIDAD PRESUPUESTAL";
+                            newFileName = `CDP-${consecutivo}`;
                         }
-                    }
-        
-                    let pageCount = 1;
-                    if (extension === "PDF" && !item.folder) {
-                        const contentUrl = `https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${item.id}/content`;
-                        pageCount = await getPDFPageCount(contentUrl, accessToken);
-                        const pdfText = await getPDFText(contentUrl, accessToken);
-                        if (pdfText.numero !== "Error") {
-                            numOP = pdfText.numero;
-                        }
-                        if (pdfText.razonSocial !== "Error") {
-                            beneficiario = pdfText.razonSocial;
-                        }
-                        if (pdfText.fechaRegistro !== "Error") {
-                            const formattedDate = formatDateString(pdfText.fechaRegistro);
-                            if (formattedDate !== "Error") {
-                                formattedCreateDate = formattedDate;
-                            }
-                        }
-                        // Update newFileName with extracted PDF data
-                        if (xDoc === "boletines") {
-                            newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
-                        } else if (xDoc === "CDP" && letras !== "") {
-                            newFileName = `${letras}-${consecutivo}- ${beneficiario}`;
-                        } else {
-                            newFileName = `OP-${numOP}-OB-${obligacion} - ${beneficiario}`;
-                        }
+                    }                      
+                     
                         updateStatus(`Procesando archivo ${index + 1}/${files.length}`, true);
                     }
         
