@@ -11,11 +11,11 @@
     <!-- === STYLES MODULE START === -->
     <style>
         :root {
-            --primary-color: #0057b8; /* Main action color */
-            --secondary-color: #f5f7fa; /* Light background */
-            --text-color: #333333; /* High contrast text */
-            --success-color: #28a745; /* Success feedback */
-            --error-color: #dc3545; /* Error feedback */
+            --primary-color: #0057b8;
+            --secondary-color: #f5f7fa;
+            --text-color: #333333;
+            --success-color: #28a745;
+            --error-color: #dc3545;
             --border-radius: 8px;
             --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             --transition: all 0.3s ease;
@@ -170,7 +170,7 @@
 </head>
 <body>
     <div class="container">
-        <h2>Boletín de Tesorería v1.06</h2>
+        <h2>Boletín de Tesorería v1.07</h2>
         <div class="button-group">
             <button id="runButton" disabled>Escribir en A1</button>
             <button id="getFolderIdButton" disabled>Listar Archivos en Excel</button>
@@ -182,23 +182,6 @@
 
     <!-- === JAVASCRIPT MODULES START === -->
     <script type="module">
-        // === SERVICE WORKER REGISTRATION ===
-        // Commented out due to 404 error for sw.js
-        /*
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then(registration => {
-                        console.log('Service Worker registered with scope:', registration.scope);
-                        registration.update();
-                    })
-                    .catch(error => {
-                        console.error('Service Worker registration failed:', error);
-                    });
-            });
-        }
-        */
-
         // === CONFIG MODULE ===
         const CONFIG = {
             clientId: "c1b4b92a-ddd4-471e-a375-4fbe017f1d31",
@@ -231,7 +214,7 @@
 
         function updateStatus(message, isLoading = false) {
             const statusDiv = document.getElementById("status");
-            statusDiv.innerHTML = ''; // Clear previous content
+            statusDiv.innerHTML = '';
             statusDiv.textContent = message;
             statusDiv.setAttribute("aria-busy", isLoading);
             if (isLoading) {
@@ -288,7 +271,7 @@
                     const sheet = context.workbook.worksheets.getActiveWorksheet();
                     sheet.getRange("A1").values = [["¡Hola desde Office.js!"]];
                     await context.sync();
-                    updateStatus("¡Escrito A1 con éxito!", false);
+                    updateStatus("¡Escrito en A1 con éxito!", false);
                 });
             } catch (error) {
                 updateStatus(`Error en run: ${error.message}`);
@@ -395,17 +378,22 @@
         // === AUTHENTICATION MODULE ===
         async function fetchWithAuth(url, accessToken, errorMessage) {
             console.log(`Fetching ${url}`);
-            const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
-            if (!response.ok) {
-                if (response.status === 401) {
-                    console.log("Invalid token. Requesting new token...");
-                    localStorage.removeItem("accessToken");
-                    await initiateOAuthFlow();
-                    throw new Error("Reauthentication required");
+            try {
+                const response = await fetch(url, { headers: { "Authorization": `Bearer ${accessToken}` } });
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        console.log("Invalid token. Requesting new token...");
+                        localStorage.removeItem("accessToken");
+                        await initiateOAuthFlow();
+                        throw new Error("Reauthentication required");
+                    }
+                    throw new Error(`${errorMessage}: ${response.statusText}`);
                 }
-                throw new Error(`${errorMessage}: ${response.statusText}`);
+                return response.json();
+            } catch (error) {
+                console.error(`Error in fetchWithAuth for ${url}:`, error);
+                throw error;
             }
-            return response.json();
         }
 
         async function initiateOAuthFlow() {
@@ -657,6 +645,7 @@
                 const file = recentData.value.find(item => item.name === fileName && item.file);
                 if (!file) {
                     updateStatus("Archivo no encontrado en recientes.");
+                    console.error("No file found in recent files matching:", fileName);
                     return;
                 }
 
@@ -667,38 +656,56 @@
                 updateStatus("Listando archivos en la carpeta padre...", true);
                 const childrenData = await fetchWithAuth(`https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${parentFolderId}/children`, accessToken, "Error al listar archivos");
 
+                console.log("Archivos encontrados en la carpeta padre:", childrenData.value.map(item => item.name));
+
                 const files = childrenData.value.filter(item => !item.folder);
+                console.log("Archivos filtrados (no carpetas):", files.map(item => item.name));
+
                 const renamedFiles = [];
 
                 updateStatus(`Procesando ${files.length} archivos para renombrar...`, true);
 
-                const cdpPattern = /^(\d{8})_CDP(\d{4})_(.+)$/i;
+                // Updated regex to match "YYYYMMDD CDP #### Description"
+                const cdpPattern = /^(\d{8})\s*CDP\s*(\d{4})\s*(.+)$/i;
 
                 for (let i = 0; i < files.length; i++) {
                     const item = files[i];
                     const ext = item.name.includes('.') ? `.${item.name.split('.').pop()}` : '';
                     const nameWithoutExtension = item.name.replace(ext, '');
+                    console.log(`Procesando archivo ${i + 1}/${files.length}: ${item.name}`);
+                    console.log(`Nombre sin extensión: ${nameWithoutExtension}`);
+
                     const match = nameWithoutExtension.match(cdpPattern);
+                    console.log(`Resultado de cdpPattern en "${nameWithoutExtension}":`, match);
 
                     if (match) {
                         const [, fecha, cdpNumber, descripcion] = match;
+                        console.log(`Coincidencia encontrada: fecha=${fecha}, cdpNumber=${cdpNumber}, descripcion=${descripcion}`);
 
+                        // Transform description
                         let transformedDesc = descripcion
                             .normalize('NFD')
                             .replace(/[\u0300-\u036f]/g, '')
                             .replace(/[^a-zA-Z0-9]/g, '')
                             .replace(/\s/g, '');
                         transformedDesc = transformedDesc.charAt(0).toUpperCase() + transformedDesc.slice(1).toLowerCase();
+                        console.log(`Descripción transformada: ${transformedDesc}`);
 
+                        // Construct new filename
                         let newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
+                        console.log(`Nombre de archivo propuesto: ${newFileName} (${newFileName.length} caracteres)`);
 
+                        // Truncate to 30 characters
                         if (newFileName.length > 30) {
                             const maxDescLength = 30 - (fecha.length + `_CDP${cdpNumber}_`.length + ext.length);
                             transformedDesc = transformedDesc.substring(0, maxDescLength);
                             newFileName = `${fecha}_CDP${cdpNumber}_${transformedDesc}${ext}`;
+                            console.log(`Nombre truncado a 30 caracteres: ${newFileName} (${newFileName.length} caracteres)`);
                         }
 
+                        // Rename the file using Microsoft Graph API
                         const renameUrl = `https://graph.microsoft.com/v1.0/drives/${fileDriveId}/items/${item.id}`;
+                        console.log(`Renombrando archivo mediante API: ${renameUrl}`);
                         const renameResponse = await fetch(renameUrl, {
                             method: 'PATCH',
                             headers: {
@@ -711,11 +718,16 @@
                         });
 
                         if (!renameResponse.ok) {
+                            const errorText = await renameResponse.text();
+                            console.error(`Error al renombrar ${item.name}: ${renameResponse.statusText}`, errorText);
                             throw new Error(`Error al renombrar ${item.name}: ${renameResponse.statusText}`);
                         }
 
                         renamedFiles.push({ oldName: item.name, newName: newFileName });
                         updateStatus(`Renombrado ${item.name} a ${newFileName}`, true);
+                        console.log(`Archivo renombrado exitosamente: ${item.name} → ${newFileName}`);
+                    } else {
+                        console.log(`Archivo "${item.name}" no coincide con el patrón CDP. Se omite.`);
                     }
                 }
 
